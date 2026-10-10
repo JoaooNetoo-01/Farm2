@@ -24,6 +24,7 @@ import {
   TreeRenderConfig,
   computeBreezeAngle,
   computeDayCycleLighting,
+  interpolateHexColor,
 } from './FarmVisualElements';
 
 interface IsometricFarmCanvasProps {
@@ -756,29 +757,75 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     []
   );
 
-  // Renderizador do Celeiro Principal e Silo com fundação de pedra, telhas e madeira envelhecida acolhedora
+  // Renderizador do Celeiro Principal e Silo com fundação de pedra, telhas, madeira envelhecida
+  // e iluminação coerente ao longo do ciclo (incluindo luz quente e suave nas janelas ao entardecer/noite)
   const renderBarn = () => {
     const pos = gridToScreen(1.0, 1.0);
     const bx = pos.x;
     const by = pos.y + 8;
 
+    const nightW = dayLighting.nightWeight;
+    const sunsetW = dayLighting.sunsetWeight;
+    const shadowContrast = dayLighting.shadowContrast;
+
+    // Luz interna quente das janelas que acende gradualmente do fim da tarde para a noite e apaga ao amanhecer
+    const windowGlowWeight = Math.min(1, Math.max(0, nightW * 0.96 + sunsetW * 0.38));
+
+    // Madeira vermelha do celeiro modulada pela luz solar/dourada e pelo luar azulado suave
+    const leftWallFill = interpolateHexColor('#991B1B', '#58161E', nightW * 0.42);
+    const rightWallFill = interpolateHexColor(
+      interpolateHexColor('#C82828', '#DC3826', sunsetW * 0.28),
+      '#7A2029',
+      nightW * 0.4
+    );
+    const gableFill = interpolateHexColor(
+      interpolateHexColor('#DC2626', '#EA4828', sunsetW * 0.3),
+      '#87242E',
+      nightW * 0.4
+    );
+    const leftRoofFill = interpolateHexColor('#6D310F', '#3F2014', nightW * 0.42);
+    const rightRoofFill = interpolateHexColor(
+      interpolateHexColor('#8C4215', '#A85319', sunsetW * 0.32),
+      '#522B1A',
+      nightW * 0.4
+    );
+    const trimStroke = interpolateHexColor(
+      interpolateHexColor('#FEF3C7', '#FDE68A', sunsetW * 0.35),
+      '#CBD5E1',
+      nightW * 0.38
+    );
+    const siloBodyFill = interpolateHexColor(
+      interpolateHexColor('#E2E8F0', '#FDE68A', sunsetW * 0.24),
+      '#94A3B8',
+      nightW * 0.42
+    );
+    const siloShadowFill = interpolateHexColor('#94A3B8', '#475569', nightW * 0.42);
+
+    // Cores do vidro da janela: reflexo diurno celeste vs luz âmbar aconchegante à noite
+    const windowGlassFill = interpolateHexColor('#BAE6FD', '#FDE047', windowGlowWeight);
+    const windowInnerFill = interpolateHexColor('#7DD3FC', '#FEF9C3', windowGlowWeight);
+
     return (
       <g key="entity_barn" transform={`translate(${bx}, ${by})`}>
         {/* Sombra projetada gradual em 3 camadas e oclusão de contato */}
-        <ellipse cx="-8" cy="20" rx="78" ry="34.5" fill="#0B2E1B" opacity="0.22" />
-        <ellipse cx="-4" cy="18.5" rx="66" ry="29.5" fill="#072617" opacity="0.28" />
-        <ellipse cx="0" cy="17" rx="55" ry="24.5" fill="#051B10" opacity="0.32" />
+        <ellipse cx="-8" cy="20" rx="78" ry="34.5" fill="#0B2E1B" opacity={0.22 * shadowContrast} />
+        <ellipse cx="-4" cy="18.5" rx="66" ry="29.5" fill="#072617" opacity={0.28 * shadowContrast} />
+        <ellipse cx="0" cy="17" rx="55" ry="24.5" fill="#051B10" opacity={0.32 * shadowContrast} />
 
-        {/* Fundação de pedra rústica aquecida na base do celeiro */}
+        {/* Fundação de pedra rústica na base do celeiro */}
         <polygon
           points="-53,7 0,33 0,27 -53,1"
-          fill="#686259"
+          fill={interpolateHexColor('#686259', '#3F444E', nightW * 0.38)}
           stroke="#3F3B36"
           strokeWidth="1"
         />
         <polygon
           points="0,33 53,7 53,1 0,27"
-          fill="#968F83"
+          fill={interpolateHexColor(
+            interpolateHexColor('#968F83', '#B09D84', sunsetW * 0.25),
+            '#5C6470',
+            nightW * 0.38
+          )}
           stroke="#3F3B36"
           strokeWidth="1"
         />
@@ -786,7 +833,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         {/* Parede Esquerda (Madeira vermelha sombreada com tábuas e veios) */}
         <polygon
           points="-52,3 0,29 0,-22 -52,-48"
-          fill="#991B1B"
+          fill={leftWallFill}
           stroke="#450A0A"
           strokeWidth="1.5"
         />
@@ -801,17 +848,44 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
               y1={yBot}
               x2={xOff}
               y2={yTop}
-              stroke="#7F1D1D"
+              stroke="#450A0A"
               strokeWidth="1.1"
-              opacity="0.8"
+              opacity="0.55"
             />
           );
         })}
 
-        {/* Parede Direita (Madeira aquecida pelo sol) */}
+        {/* Janela Lateral Esquerda com moldura tradicional e luz interna noturna */}
+        <g>
+          {windowGlowWeight > 0.04 && (
+            <ellipse
+              cx="-25"
+              cy="-12"
+              rx="11"
+              ry="8.5"
+              fill="#F59E0B"
+              opacity={windowGlowWeight * 0.24}
+            />
+          )}
+          <polygon
+            points="-31,-19 -19,-13 -19,-4 -31,-10"
+            fill={windowGlassFill}
+            stroke={trimStroke}
+            strokeWidth="1.4"
+          />
+          <polygon
+            points="-29.5,-17.5 -21,-13.2 -21,-6.2 -29.5,-10.5"
+            fill={windowInnerFill}
+            opacity={0.45 + windowGlowWeight * 0.45}
+          />
+          <line x1="-25" y1="-16" x2="-25" y2="-7" stroke="#78350F" strokeWidth="0.9" />
+          <line x1="-31" y1="-11.5" x2="-19" y2="-5.5" stroke="#78350F" strokeWidth="0.9" />
+        </g>
+
+        {/* Parede Direita (Madeira aquecida pelo sol de dia, suave à noite) */}
         <polygon
           points="0,29 52,3 52,-48 0,-22"
-          fill="#C82828"
+          fill={rightWallFill}
           stroke="#7F1D1D"
           strokeWidth="1.5"
         />
@@ -826,9 +900,9 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
               y1={yBot}
               x2={xOff}
               y2={yTop}
-              stroke="#991B1B"
+              stroke="#7F1D1D"
               strokeWidth="1.1"
-              opacity="0.65"
+              opacity="0.55"
             />
           );
         })}
@@ -836,40 +910,40 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         {/* Oitão Frontal Direito */}
         <polygon
           points="0,-22 52,-48 26,-78"
-          fill="#DC2626"
+          fill={gableFill}
           stroke="#7F1D1D"
           strokeWidth="1.5"
         />
 
-        {/* Sombra de oclusão sob o beiral do telhado */}
-        <polygon points="-52,-44 0,-18 0,-22 -52,-48" fill="#450A0A" opacity="0.6" />
-        <polygon points="0,-18 52,-44 52,-48 0,-22" fill="#450A0A" opacity="0.35" />
+        {/* Sombra de oclusão sob o beiral do telhado e sob a empena */}
+        <polygon points="-52,-44 0,-18 0,-22 -52,-48" fill="#2A0505" opacity="0.62" />
+        <polygon points="0,-18 52,-44 52,-48 0,-22" fill="#2A0505" opacity="0.38" />
 
         {/* Telhado Esquerdo com fileiras de telhas de madeira */}
         <polygon
           points="-58,-45 -4,-19 26,-78 -28,-104"
-          fill="#6D310F"
+          fill={leftRoofFill}
           stroke="#3E1B06"
           strokeWidth="2"
         />
         <line x1="-47" y1="-57" x2="7" y2="-31" stroke="#3E1B06" strokeWidth="1.3" opacity="0.6" />
-        <line x1="-39" y1="-71" x2="15" y2="-45" stroke="#854D0E" strokeWidth="1.3" opacity="0.65" />
+        <line x1="-39" y1="-71" x2="15" y2="-45" stroke="#854D0E" strokeWidth="1.3" opacity={0.65 * (1 - nightW * 0.35)} />
         <line x1="-32" y1="-86" x2="22" y2="-60" stroke="#3E1B06" strokeWidth="1.3" opacity="0.55" />
 
         {/* Telhado Direito iluminado */}
         <polygon
           points="-4,-19 26,-78 58,-45 28,-16"
-          fill="#8C4215"
+          fill={rightRoofFill}
           stroke="#3E1B06"
           strokeWidth="2"
         />
-        <line x1="6" y1="-39" x2="38" y2="-26" stroke="#A16207" strokeWidth="1.2" opacity="0.55" />
+        <line x1="6" y1="-39" x2="38" y2="-26" stroke="#A16207" strokeWidth="1.2" opacity={0.55 * (1 - nightW * 0.35)} />
 
         {/* Beirais creme chanfrados com relevo */}
         <polyline
           points="-58,-45 -4,-19 26,-78 58,-45"
           fill="none"
-          stroke="#FEF3C7"
+          stroke={trimStroke}
           strokeWidth="3.6"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -878,51 +952,112 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         {/* Porta dupla tradicional com batente profundo e reforços em X */}
         <polygon
           points="11,24 41,9 41,-21 11,-6"
-          fill="#450A0A"
+          fill="#3B0808"
         />
         <polygon
           points="12,23 40,9 40,-20 12,-6"
-          fill="#7F1D1D"
-          stroke="#FEF3C7"
+          fill={interpolateHexColor('#7F1D1D', '#4C141A', nightW * 0.38)}
+          stroke={trimStroke}
           strokeWidth="2.4"
         />
-        <line x1="12" y1="23" x2="40" y2="-20" stroke="#FEF3C7" strokeWidth="2" />
-        <line x1="12" y1="-6" x2="40" y2="9" stroke="#FEF3C7" strokeWidth="2" />
-        <line x1="26" y1="16" x2="26" y2="-13" stroke="#FEF3C7" strokeWidth="2" />
+        <line x1="12" y1="23" x2="40" y2="-20" stroke={trimStroke} strokeWidth="2" />
+        <line x1="12" y1="-6" x2="40" y2="9" stroke={trimStroke} strokeWidth="2" />
+        <line x1="26" y1="16" x2="26" y2="-13" stroke={trimStroke} strokeWidth="2" />
+
+        {/* Reflexo quente muito discreto no chão em frente ao celeiro durante a noite */}
+        {windowGlowWeight > 0.05 && (
+          <ellipse
+            cx="28"
+            cy="22"
+            rx="16"
+            ry="6.5"
+            fill="#FDE68A"
+            opacity={windowGlowWeight * 0.14}
+          />
+        )}
 
         {/* Fardos de feno dourados texturizados ao lado da entrada */}
         <g transform="translate(4, 28)">
-          <ellipse cx="0" cy="4" rx="9.5" ry="4.6" fill="#022C22" opacity="0.38" />
-          <rect x="-7" y="-4" width="14" height="8" rx="2" fill="#EAB308" stroke="#854D0E" strokeWidth="1" />
-          <rect x="-6" y="-3.2" width="12" height="3" rx="1" fill="#FEF08A" opacity="0.7" />
+          <ellipse cx="0" cy="4" rx="9.5" ry="4.6" fill="#022C22" opacity={0.38 * shadowContrast} />
+          <rect
+            x="-7"
+            y="-4"
+            width="14"
+            height="8"
+            rx="2"
+            fill={interpolateHexColor('#EAB308', '#A17C1B', nightW * 0.38)}
+            stroke="#854D0E"
+            strokeWidth="1"
+          />
+          <rect
+            x="-6"
+            y="-3.2"
+            width="12"
+            height="3"
+            rx="1"
+            fill="#FEF08A"
+            opacity={0.7 * (1 - nightW * 0.4)}
+          />
           <line x1="-3" y1="-4" x2="-3" y2="4" stroke="#713F12" strokeWidth="0.9" />
           <line x1="3" y1="-4" x2="3" y2="4" stroke="#713F12" strokeWidth="0.9" />
         </g>
 
-        {/* Janela iluminada do Sótão com moldura */}
-        <polygon
-          points="20,-42 32,-48 32,-60 20,-54"
-          fill="#FDE68A"
-          stroke="#FFFBEB"
-          strokeWidth="2"
-        />
-        <line x1="26" y1="-45" x2="26" y2="-57" stroke="#92400E" strokeWidth="1" />
+        {/* Janela do Sótão com moldura e brilho interno suave ao entardecer/noite */}
+        <g>
+          {windowGlowWeight > 0.04 && (
+            <>
+              <ellipse
+                cx="26"
+                cy="-51"
+                rx="13.5"
+                ry="10"
+                fill="#F59E0B"
+                opacity={windowGlowWeight * 0.28}
+              />
+              <ellipse
+                cx="26"
+                cy="-51"
+                rx="8.5"
+                ry="6.5"
+                fill="#FEF08A"
+                opacity={windowGlowWeight * 0.32}
+              />
+            </>
+          )}
+          <polygon
+            points="20,-42 32,-48 32,-60 20,-54"
+            fill={windowGlassFill}
+            stroke={trimStroke}
+            strokeWidth="2"
+          />
+          <polygon
+            points="21.5,-43.8 30.5,-48.3 30.5,-58.2 21.5,-53.7"
+            fill={windowInnerFill}
+            opacity={0.5 + windowGlowWeight * 0.45}
+          />
+          <line x1="26" y1="-45" x2="26" y2="-57" stroke="#92400E" strokeWidth="1" />
+          <line x1="20" y1="-48" x2="32" y2="-54" stroke="#92400E" strokeWidth="0.9" />
+        </g>
 
-        {/* Silo cilíndrico metálico com brilho especular, anéis e escada lateral */}
+        {/* Silo cilíndrico metálico com brilho especular coerente, anéis e escada lateral */}
         <g transform="translate(-54, -14)">
-          <ellipse cx="0" cy="20" rx="19.5" ry="9.8" fill="#022C22" opacity="0.4" />
+          <ellipse cx="0" cy="20" rx="19.5" ry="9.8" fill="#022C22" opacity={0.4 * shadowContrast} />
           {/* Base de pedra do silo */}
           <ellipse cx="0" cy="17.5" rx="17" ry="8.5" fill="#64748B" stroke="#334155" strokeWidth="1" />
           <path
             d="M-16,-35 L-16,16 A16,8 0 0,0 16,16 L16,-35 Z"
-            fill="#E2E8F0"
+            fill={siloBodyFill}
             stroke="#475569"
             strokeWidth="1.5"
           />
-          {/* Faixa vertical de brilho metálico */}
-          <path d="M-9,-35 L-9,22 L-3,23.5 L-3,-35 Z" fill="#FFFFFF" opacity="0.65" />
+          {/* Faixa vertical de brilho metálico modulada pelo horário */}
+          <path
+            d="M-9,-35 L-9,22 L-3,23.5 L-3,-35 Z"
+            fill={interpolateHexColor('#FFFFFF', '#E0F2FE', nightW * 0.5)}
+            opacity={0.65 * (1 - nightW * 0.35)}
+          />
           {/* Lado direito sombreado do cilindro */}
-          <path d="M2,-35 L2,24 A16,8 0 0,0 16,16 L16,-35 Z" fill="#94A3B8" opacity="0.65" />
+          <path d="M2,-35 L2,24 A16,8 0 0,0 16,16 L16,-35 Z" fill={siloShadowFill} opacity="0.65" />
 
           {/* Anéis metálicos e rebites */}
           <path d="M-16,-22 A16,6 0 0,0 16,-22" fill="none" stroke="#64748B" strokeWidth="1.2" />
@@ -939,21 +1074,21 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           {/* Cúpula vermelha do silo com reflexo */}
           <path
             d="M-16,-35 C-16,-55 16,-55 16,-35 Z"
-            fill="#C82828"
+            fill={rightWallFill}
             stroke="#7F1D1D"
             strokeWidth="1.5"
           />
           <path
             d="M-8,-36 C-6,-50 4,-50 7,-36 Z"
             fill="#EF4444"
-            opacity="0.7"
+            opacity={0.7 * (1 - nightW * 0.4)}
           />
           <ellipse
             cx="0"
             cy="-35"
             rx="16"
             ry="6"
-            fill="#DC2626"
+            fill={gableFill}
             stroke="#7F1D1D"
             strokeWidth="1.2"
           />
@@ -1104,6 +1239,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           windStrength={windStrength}
           isRaining={isRaining}
           plotSeed={plotSeed}
+          dayLighting={dayLighting}
         />
 
         {/* Indicador de Colheita Pronta elevado e compacto para NUNCA cobrir a planta */}
@@ -1323,6 +1459,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             timeSec={animTimeSec}
             windStrength={windStrength}
             seed={sh.seed}
+            dayLighting={dayLighting}
           />
         ),
       });
@@ -1379,12 +1516,13 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             screenX={pos.x}
             screenY={pos.y}
             timeSec={animTimeSec}
+            dayLighting={dayLighting}
           />
         ),
       });
     });
 
-    return items.sort((a, b, ) => a.depth - b.depth);
+    return items.sort((a, b) => a.depth - b.depth);
   }, [
     plots,
     shrubs,
@@ -1415,6 +1553,19 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       { cx: 910, cy: 64, r: 1.2, op: 0.78 },
       { cx: 140, cy: 92, r: 1.05, op: 0.65 },
       { cx: 835, cy: 96, r: 1.15, op: 0.68 },
+    ],
+    []
+  );
+
+  // Poucos vaga-lumes noturnos (6 indivíduos) restritos às bordas de vegetação e arbustos
+  const nightFireflies = useMemo(
+    () => [
+      { id: 'ff_1', gx: 0.55, gy: 1.65, phase: 0.0, speed: 0.9, zone: 'zone_core' },
+      { id: 'ff_2', gx: 0.58, gy: 4.15, phase: 1.7, speed: 0.78, zone: 'zone_core' },
+      { id: 'ff_3', gx: 3.72, gy: 0.72, phase: 3.1, speed: 0.85, zone: 'zone_core' },
+      { id: 'ff_4', gx: 6.25, gy: 0.95, phase: 4.4, speed: 0.82, zone: 'zone_east' },
+      { id: 'ff_5', gx: 2.05, gy: 7.95, phase: 2.3, speed: 0.75, zone: 'zone_south' },
+      { id: 'ff_6', gx: 7.55, gy: 6.85, phase: 5.2, speed: 0.88, zone: 'zone_southeast' },
     ],
     []
   );
@@ -1657,89 +1808,105 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           )}
 
           {/* ================= CAMINHOS DE TERRA COM BORDAS ORGÂNICAS SUAVES E SEIXOS ================= */}
-          {[
-            { gx: 1, gy: 2, w: 1, h: 3 },
-            { gx: 1, gy: 4, w: 3, h: 1 },
-            { gx: 4, gy: 2, w: 1, h: 3 },
-          ].map((path, idx) => (
-            <g key={`path_core_${idx}`}>
-              {/* Transição externa escura entre grama e terra batida */}
-              <polygon
-                points={getPolygonPoints(
-                  path.gx + 0.06,
-                  path.gy + 0.06,
-                  path.w - 0.12,
-                  path.h - 0.12
-                )}
-                fill="#2D5A27"
-                fillOpacity="0.28"
-              />
-              <polygon
-                points={getPolygonPoints(
-                  path.gx + 0.1,
-                  path.gy + 0.1,
-                  path.w - 0.2,
-                  path.h - 0.2
-                )}
-                fill="#78350F"
-                fillOpacity="0.34"
-              />
-              {/* Leito principal de terra batida sem contorno rígido */}
-              <polygon
-                points={getPolygonPoints(
-                  path.gx + 0.14,
-                  path.gy + 0.14,
-                  path.w - 0.28,
-                  path.h - 0.28
-                )}
-                fill={isRaining ? '#854D0E' : '#B87333'}
-                fillOpacity="0.66"
-              />
-              {/* Centro levemente mais claro onde há pisoteio */}
-              <polygon
-                points={getPolygonPoints(
-                  path.gx + 0.22,
-                  path.gy + 0.22,
-                  path.w - 0.44,
-                  path.h - 0.44
-                )}
-                fill={isRaining ? '#A16207' : '#D49452'}
-                fillOpacity="0.32"
-              />
-            </g>
-          ))}
-
-          {/* Pedrinhas decorativas embutidas nos caminhos */}
-          {[
-            { gx: 1.3, gy: 2.6 },
-            { gx: 1.7, gy: 3.8 },
-            { gx: 2.8, gy: 4.5 },
-            { gx: 4.4, gy: 2.8 },
-            { gx: 4.5, gy: 4.2 },
-          ].map((st, idx) => {
-            const pt = gridToScreen(st.gx, st.gy);
-            return (
-              <g key={`pebble_${idx}`}>
-                <ellipse cx={pt.x - 0.3} cy={pt.y + 0.3} rx="2.7" ry="1.45" fill="#451A03" opacity="0.28" />
-                <ellipse cx={pt.x} cy={pt.y} rx="2.4" ry="1.25" fill="#8C5828" opacity="0.52" />
-              </g>
+          {(() => {
+            const pathMainFill = interpolateHexColor(
+              interpolateHexColor(isRaining ? '#854D0E' : '#B87333', '#C97B32', dayLighting.sunsetWeight * 0.25),
+              '#5C4332',
+              dayLighting.nightWeight * 0.38
             );
-          })}
+            const pathCenterFill = interpolateHexColor(
+              interpolateHexColor(isRaining ? '#A16207' : '#D49452', '#E5A256', dayLighting.sunsetWeight * 0.28),
+              '#735642',
+              dayLighting.nightWeight * 0.38
+            );
+            return (
+              <>
+                {[
+                  { gx: 1, gy: 2, w: 1, h: 3 },
+                  { gx: 1, gy: 4, w: 3, h: 1 },
+                  { gx: 4, gy: 2, w: 1, h: 3 },
+                ].map((path, idx) => (
+                  <g key={`path_core_${idx}`}>
+                    {/* Transição externa escura entre grama e terra batida */}
+                    <polygon
+                      points={getPolygonPoints(
+                        path.gx + 0.06,
+                        path.gy + 0.06,
+                        path.w - 0.12,
+                        path.h - 0.12
+                      )}
+                      fill="#2D5A27"
+                      fillOpacity="0.28"
+                    />
+                    <polygon
+                      points={getPolygonPoints(
+                        path.gx + 0.1,
+                        path.gy + 0.1,
+                        path.w - 0.2,
+                        path.h - 0.2
+                      )}
+                      fill="#78350F"
+                      fillOpacity="0.34"
+                    />
+                    {/* Leito principal de terra batida sem contorno rígido */}
+                    <polygon
+                      points={getPolygonPoints(
+                        path.gx + 0.14,
+                        path.gy + 0.14,
+                        path.w - 0.28,
+                        path.h - 0.28
+                      )}
+                      fill={pathMainFill}
+                      fillOpacity="0.66"
+                    />
+                    {/* Centro levemente mais claro onde há pisoteio */}
+                    <polygon
+                      points={getPolygonPoints(
+                        path.gx + 0.22,
+                        path.gy + 0.22,
+                        path.w - 0.44,
+                        path.h - 0.44
+                      )}
+                      fill={pathCenterFill}
+                      fillOpacity="0.32"
+                    />
+                  </g>
+                ))}
 
-          {unlockedZoneIds.has('zone_east') && (
-            <g>
-              <polygon
-                points={getPolygonPoints(4.08, 2.18, 1.84, 0.84)}
-                fill="#78350F"
-                fillOpacity="0.28"
-              />
-              <polygon
-                points={getPolygonPoints(4.14, 2.24, 1.72, 0.72)}
-                fill={isRaining ? '#854D0E' : '#B87333'}
-                fillOpacity="0.64"
-              />
-            </g>
-          )}
+                {/* Pedrinhas decorativas embutidas nos caminhos */}
+                {[
+                  { gx: 1.3, gy: 2.6 },
+                  { gx: 1.7, gy: 3.8 },
+                  { gx: 2.8, gy: 4.5 },
+                  { gx: 4.4, gy: 2.8 },
+                  { gx: 4.5, gy: 4.2 },
+                ].map((st, idx) => {
+                  const pt = gridToScreen(st.gx, st.gy);
+                  return (
+                    <g key={`pebble_${idx}`}>
+                      <ellipse cx={pt.x - 0.3} cy={pt.y + 0.3} rx="2.7" ry="1.45" fill="#451A03" opacity="0.28" />
+                      <ellipse cx={pt.x} cy={pt.y} rx="2.4" ry="1.25" fill={pathMainFill} opacity="0.62" />
+                    </g>
+                  );
+                })}
+
+                {unlockedZoneIds.has('zone_east') && (
+                  <g>
+                    <polygon
+                      points={getPolygonPoints(4.08, 2.18, 1.84, 0.84)}
+                      fill="#78350F"
+                      fillOpacity="0.28"
+                    />
+                    <polygon
+                      points={getPolygonPoints(4.14, 2.24, 1.72, 0.72)}
+                      fill={pathMainFill}
+                      fillOpacity="0.64"
+                    />
+                  </g>
+                )}
+              </>
+            );
+          })()}
 
           {/* Agrupamentos irregulares de flores silvestres, trevos, tufos de grama, pedrinhas e folhas caídas */}
           {groundFlora.map((gf) => {
@@ -1753,6 +1920,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                 unlocked={unlockedZoneIds.has(gf.zone)}
                 timeSec={animTimeSec}
                 windStrength={windStrength}
+                dayLighting={dayLighting}
               />
             );
           })}
@@ -1908,6 +2076,30 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
 
           {/* ================= BORBOLETAS CAMPESTRES OCASIONAIS ================= */}
           {renderButterflies()}
+
+          {/* ================= VAGA-LUMES NOTURNOS DISCRETOS NAS ÁREAS DE VEGETAÇÃO ================= */}
+          {!isRaining && dayLighting.nightWeight > 0.25 && (
+            <g className="pointer-events-none">
+              {nightFireflies.map((ff) => {
+                if (!unlockedZoneIds.has(ff.zone)) return null;
+                const basePt = gridToScreen(ff.gx, ff.gy);
+                const t = animTimeSec * ff.speed + ff.phase;
+                const fx = basePt.x + Math.sin(t * 1.1) * 9 + Math.cos(t * 0.6) * 4;
+                const fy = basePt.y - 10 + Math.cos(t * 0.9) * 5;
+                // Pulso suave de bioluminescência que aparece gradualmente à noite e desaparece ao amanhecer
+                const pulse = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(t * 2.1), 1.6);
+                const alpha = Math.min(1, (dayLighting.nightWeight - 0.25) / 0.55) * pulse;
+
+                return (
+                  <g key={ff.id} transform={`translate(${fx}, ${fy})`} opacity={alpha}>
+                    <circle cx="0" cy="0" r="4.2" fill="#BEF264" opacity="0.24" />
+                    <circle cx="0" cy="0" r="2.2" fill="#D9F99D" opacity="0.45" />
+                    <circle cx="0" cy="0" r="1.05" fill="#FEF9C3" />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* ================= RESPINGOS E ONDAS DE CHUVA FIXOS NO SOLO ISOMÉTRICO ================= */}
           {isRaining &&
@@ -2143,16 +2335,21 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         )}
       </svg>
 
-      {/* Indicador discreto de terreno, período do dia e clima no canto inferior esquerdo */}
-      <div className="absolute bottom-3 left-3 pointer-events-none hidden sm:flex items-center gap-2 text-xs font-medium text-emerald-950/90 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-sm">
-        <span>Terrenos: {unlockedCount}/4</span>
-        <span aria-hidden="true">·</span>
-        <span>
-          {dayLighting.icon} {dayLighting.label}
+      {/* Indicador discreto de horário e clima acessível tanto em celulares quanto em telas maiores */}
+      <div className="absolute top-[104px] right-3 sm:top-auto sm:right-auto sm:bottom-3 sm:left-3 pointer-events-none flex items-center gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-semibold text-slate-100 bg-slate-900/75 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border border-white/10 shadow-sm z-10">
+        <span className="hidden sm:inline">Terrenos: {unlockedCount}/4</span>
+        <span className="hidden sm:inline" aria-hidden="true">·</span>
+        <span className="flex items-center gap-1 text-amber-200">
+          <span>{dayLighting.icon}</span>
+          <span>{dayLighting.label}</span>
         </span>
-        <span aria-hidden="true">·</span>
-        <span>
-          {isRaining ? '🌧️' : isSunny ? '☀️' : isBreezy ? '⛅' : '☀️'} {weatherMeta.name} ({weatherMeta.badgeText})
+        <span aria-hidden="true" className="text-slate-400">·</span>
+        <span className="flex items-center gap-1">
+          <span>{isRaining ? '🌧️' : isSunny ? '☀️' : '⛅'}</span>
+          <span className="hidden xs:inline sm:inline">{weatherMeta.name}</span>
+          <span className="font-mono text-[10px] sm:text-[11px] text-emerald-300">
+            ({weatherMeta.badgeText})
+          </span>
         </span>
       </div>
     </div>

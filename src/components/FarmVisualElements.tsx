@@ -467,6 +467,7 @@ interface CropVisualProps {
   windStrength: number;
   isRaining: boolean;
   plotSeed: number;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
@@ -474,6 +475,7 @@ interface CropVisualProps {
  * - Paleta naturalista aconchegante sem contornos pretos pesados nem verdes fluorescentes.
  * - Variação determinística por canteiro e por planta (inclinação, curvatura e altura).
  * - Sulcos volumétricos de terra arada, torrões orgânicos e sombras de contato suaves.
+ * - Harmonização sutil com o ciclo de manhã, meio-dia, fim de tarde e noite.
  */
 export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
   cropType,
@@ -484,11 +486,29 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
   windStrength,
   isRaining,
   plotSeed,
+  dayLighting,
 }) => {
-  const soilDeep = isRaining ? '#2E1909' : '#462812';
-  const soilDark = isRaining ? '#3D220D' : '#593418';
-  const soilMid = isRaining ? '#522E13' : '#734421';
-  const soilLight = isRaining ? '#683B1A' : '#8F562C';
+  const nightW = dayLighting ? dayLighting.nightWeight : 0;
+  const sunsetW = dayLighting ? dayLighting.sunsetWeight : 0;
+  const shadowContrast = dayLighting ? dayLighting.shadowContrast : isRaining ? 0.78 : 1.0;
+
+  const baseSoilDeep = isRaining ? '#2E1909' : '#462812';
+  const baseSoilDark = isRaining ? '#3D220D' : '#593418';
+  const baseSoilMid = isRaining ? '#522E13' : '#734421';
+  const baseSoilLight = isRaining ? '#683B1A' : '#8F562C';
+
+  const soilDeep = interpolateHexColor(baseSoilDeep, '#1B1418', nightW * 0.35);
+  const soilDark = interpolateHexColor(baseSoilDark, '#271D22', nightW * 0.35);
+  const soilMid = interpolateHexColor(
+    interpolateHexColor(baseSoilMid, '#824B22', sunsetW * 0.22),
+    '#38292F',
+    nightW * 0.36
+  );
+  const soilLight = interpolateHexColor(
+    interpolateHexColor(baseSoilLight, '#A6632E', sunsetW * 0.28),
+    '#4A373E',
+    nightW * 0.38
+  );
 
   // Camada base de sulcos arados isométricos com iluminação superior-direita consistente
   const renderSoilFurrows = (dense: boolean) => (
@@ -607,6 +627,39 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
           2.1
         );
 
+        // Cores dinâmicas sutis para folhagens e grãos das culturas conforme o horário
+        const cropLeafDark = interpolateHexColor('#1E4D2B', '#143824', nightW * 0.38);
+        const cropLeafMid = interpolateHexColor(
+          interpolateHexColor('#2E6F3E', '#3F7D3A', sunsetW * 0.22),
+          '#1E5233',
+          nightW * 0.38
+        );
+        const cropLeafLight = interpolateHexColor(
+          interpolateHexColor('#3B8A4C', '#589A48', sunsetW * 0.28),
+          '#296B43',
+          nightW * 0.4
+        );
+        const cropLeafSun = interpolateHexColor(
+          interpolateHexColor('#54A85B', '#7BB856', sunsetW * 0.32),
+          '#3B8559',
+          nightW * 0.42
+        );
+        const goldGrainMain = interpolateHexColor(
+          interpolateHexColor('#E5A00D', '#EA8B14', sunsetW * 0.32),
+          '#9E7622',
+          nightW * 0.36
+        );
+        const goldGrainHighlight = interpolateHexColor(
+          interpolateHexColor('#FEF08A', '#FDBA74', sunsetW * 0.34),
+          '#CBD5E1',
+          nightW * 0.35
+        );
+        const carrotBodyMain = interpolateHexColor(
+          interpolateHexColor('#DF5817', '#EA681C', sunsetW * 0.25),
+          '#A3451E',
+          nightW * 0.34
+        );
+
         // =========================================================================
         // CULTURA 1: MILHO DOCE (CORN) — Folhas arqueadas orgânicas e espigas naturais
         // =========================================================================
@@ -618,7 +671,7 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
             return (
               <g key={idx} transform={`translate(${px}, ${py}) scale(${clump.scale})`}>
                 {/* Sombra de contato projetada para a esquerda-baixo (luz vinda do topo-direita) */}
-                <ellipse cx="-0.8" cy="2.1" rx="6.4" ry="2.7" fill="#1F1105" opacity="0.48" />
+                <ellipse cx="-0.8" cy="2.1" rx="6.4" ry="2.7" fill="#1F1105" opacity={0.48 * shadowContrast} />
                 <path
                   d="M-4.8,1.9 C-2.4,-0.8 2.4,-0.8 4.8,1.9 C2.2,3.2 -2.2,3.2 -4.8,1.9 Z"
                   fill={soilMid}
@@ -630,8 +683,8 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
 
                 <g transform={`translate(0, -1.8) rotate(${stemBend})`}>
                   {/* Bainha basal e caule jovem com iluminação lateral suave */}
-                  <path d="M-1.3,2.2 L-0.7,-10.8 L0.8,-10.8 L1.3,2.2 Z" fill="#2E6F3E" />
-                  <path d="M0,2.2 L0.2,-10.6 L0.8,-10.6 L1.0,2.2 Z" fill="#68B66B" opacity="0.8" />
+                  <path d="M-1.3,2.2 L-0.7,-10.8 L0.8,-10.8 L1.3,2.2 Z" fill={cropLeafMid} />
+                  <path d="M0,2.2 L0.2,-10.6 L0.8,-10.6 L1.0,2.2 Z" fill={cropLeafSun} opacity="0.8" />
 
                   {/* Folha esquerda arqueada com nervura central clara */}
                   <g transform={`translate(-0.4, -3.4) rotate(${leafBendLeft})`}>
@@ -868,12 +921,12 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
                     cy="0"
                     rx="3.6"
                     ry="7.1"
-                    fill="#E5A00D"
+                    fill={goldGrainMain}
                     stroke="#85510A"
                     strokeWidth="0.65"
                   />
-                  <ellipse cx="0.6" cy="-0.5" rx="2.2" ry="5.5" fill="#FDE047" opacity="0.88" />
-                  <ellipse cx="1.0" cy="-1.5" rx="1.1" ry="3.4" fill="#FEF9C3" opacity="0.75" />
+                  <ellipse cx="0.6" cy="-0.5" rx="2.2" ry="5.5" fill={goldGrainHighlight} opacity="0.88" />
+                  <ellipse cx="1.0" cy="-1.5" rx="1.1" ry="3.4" fill="#FEF9C3" opacity={0.75 * (1 - nightW * 0.45)} />
                   {/* Fileiras sutis de grãos */}
                   <path
                     d="M-1.8,-3.5 Q0,-4.0 1.8,-3.5 M-2.2,-0.8 Q0,-1.3 2.2,-0.8 M-1.9,1.8 Q0,1.3 1.9,1.8"
@@ -893,11 +946,11 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
                   {/* Palha abraçando a base da espiga */}
                   <path
                     d="M-3.7,1.4 C-2.2,5.6 2.2,5.6 3.7,1.4 L2.1,6.8 C0.8,7.6 -0.8,7.6 -2.1,6.8 Z"
-                    fill="#2E6F3E"
+                    fill={cropLeafMid}
                   />
                   <path
                     d="M-1.2,3.0 C0.6,5.2 2.4,4.4 3.4,1.6 L1.9,6.6 L-0.6,6.6 Z"
-                    fill="#54A85B"
+                    fill={cropLeafSun}
                   />
                 </g>
 
@@ -908,11 +961,11 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
                     cy="0"
                     rx="3.4"
                     ry="6.6"
-                    fill="#F5B118"
+                    fill={goldGrainMain}
                     stroke="#85510A"
                     strokeWidth="0.65"
                   />
-                  <ellipse cx="0.5" cy="-0.6" rx="2.1" ry="5.0" fill="#FEF08A" opacity="0.9" />
+                  <ellipse cx="0.5" cy="-0.6" rx="2.1" ry="5.0" fill={goldGrainHighlight} opacity="0.9" />
                   <path
                     d="M-1.6,-3.0 Q0,-3.5 1.6,-3.0 M-2.0,-0.4 Q0,-0.9 2.0,-0.4 M-1.6,2.2 Q0,1.7 1.6,2.2"
                     stroke="#A16207"
@@ -922,7 +975,7 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
                   />
                   <path
                     d="M-3.5,1.2 C-2.0,5.2 2.0,5.2 3.5,1.2 L1.8,6.2 C0.6,7.0 -0.6,7.0 -1.8,6.2 Z"
-                    fill="#3B8A4C"
+                    fill={cropLeafLight}
                   />
                 </g>
               </g>
@@ -1094,17 +1147,17 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
                       cy={-h - 2.3}
                       rx="2.45"
                       ry="5.8"
-                      fill="#D9900F"
+                      fill={goldGrainMain}
                       stroke="#784408"
                       strokeWidth="0.6"
                     />
                     {/* Grãos trançados iluminados à direita */}
-                    <ellipse cx="-0.75" cy={-h - 4.4} rx="1.15" ry="1.45" transform={`rotate(-18 -0.75 ${-h - 4.4})`} fill="#F5B82E" />
-                    <ellipse cx="0.75" cy={-h - 3.6} rx="1.15" ry="1.45" transform={`rotate(18 0.75 ${-h - 3.6})`} fill="#FEF08A" />
-                    <ellipse cx="-0.75" cy={-h - 2.0} rx="1.2" ry="1.5" transform={`rotate(-18 -0.75 ${-h - 2.0})`} fill="#F5B82E" />
-                    <ellipse cx="0.75" cy={-h - 1.2} rx="1.2" ry="1.5" transform={`rotate(18 0.75 ${-h - 1.2})`} fill="#FEF08A" />
-                    <ellipse cx="-0.65" cy={-h + 0.3} rx="1.1" ry="1.35" transform={`rotate(-18 -0.65 ${-h + 0.3})`} fill="#E09F1F" />
-                    <ellipse cx="0.65" cy={-h + 0.9} rx="1.1" ry="1.35" transform={`rotate(18 0.65 ${-h + 0.9})`} fill="#FDE047" />
+                    <ellipse cx="-0.75" cy={-h - 4.4} rx="1.15" ry="1.45" transform={`rotate(-18 -0.75 ${-h - 4.4})`} fill={goldGrainMain} />
+                    <ellipse cx="0.75" cy={-h - 3.6} rx="1.15" ry="1.45" transform={`rotate(18 0.75 ${-h - 3.6})`} fill={goldGrainHighlight} />
+                    <ellipse cx="-0.75" cy={-h - 2.0} rx="1.2" ry="1.5" transform={`rotate(-18 -0.75 ${-h - 2.0})`} fill={goldGrainMain} />
+                    <ellipse cx="0.75" cy={-h - 1.2} rx="1.2" ry="1.5" transform={`rotate(18 0.75 ${-h - 1.2})`} fill={goldGrainHighlight} />
+                    <ellipse cx="-0.65" cy={-h + 0.3} rx="1.1" ry="1.35" transform={`rotate(-18 -0.65 ${-h + 0.3})`} fill={goldGrainMain} />
+                    <ellipse cx="0.65" cy={-h + 0.9} rx="1.1" ry="1.35" transform={`rotate(18 0.65 ${-h + 0.9})`} fill={goldGrainHighlight} />
                   </g>
                 );
               })}
@@ -1244,25 +1297,25 @@ export const IsometricCropArtwork: React.FC<CropVisualProps> = ({
             />
 
             <g transform="translate(0, -5.2)">
-              {renderCarrotFrond(-28 + frondLeftSway, 13.2 * clump.curl, '#1E4D2B', '#2E6F3E', 1)}
-              {renderCarrotFrond(-9 + frondCenterSway * 0.9, 15.6, '#255E34', '#3B8A4C', 2)}
-              {renderCarrotFrond(10 + frondCenterSway * 1.05, 15.2, '#2E6F3E', '#54A85B', 3)}
-              {renderCarrotFrond(28 + frondRightSway, 13.0 * (2 - clump.curl), '#2E6F3E', '#68B66B', 4)}
+              {renderCarrotFrond(-28 + frondLeftSway, 13.2 * clump.curl, cropLeafDark, cropLeafMid, 1)}
+              {renderCarrotFrond(-9 + frondCenterSway * 0.9, 15.6, cropLeafMid, cropLeafLight, 2)}
+              {renderCarrotFrond(10 + frondCenterSway * 1.05, 15.2, cropLeafMid, cropLeafSun, 3)}
+              {renderCarrotFrond(28 + frondRightSway, 13.0 * (2 - clump.curl), cropLeafMid, cropLeafSun, 4)}
             </g>
 
             {/* Raiz cônica volumétrica erguida da terra fofa */}
             <path
               d="M-5.4,-4.4 C-5.6,-7.7 5.6,-7.7 5.4,-4.4 L3.2,2.7 C1.5,4.1 -1.5,4.1 -3.2,2.7 Z"
-              fill="#DF5817"
+              fill={carrotBodyMain}
               stroke="#7A2908"
               strokeWidth="0.7"
             />
             {/* Iluminação quente à direita */}
             <path
               d="M-1.7,-5.6 C0.8,-6.4 3.5,-5.9 4.4,-4.4 L2.3,2.3 C0.8,3.1 -0.5,2.9 -1.2,2.1 Z"
-              fill="#F7823B"
+              fill={interpolateHexColor('#F7823B', '#B85A2B', nightW * 0.34)}
             />
-            <ellipse cx="1.6" cy="-3.4" rx="1.15" ry="2.1" fill="#FDBA74" opacity="0.7" />
+            <ellipse cx="1.6" cy="-3.4" rx="1.15" ry="2.1" fill="#FDBA74" opacity={0.7 * (1 - nightW * 0.4)} />
             {/* Anéis horizontais orgânicos típicos da cenoura */}
             <path
               d="M-3.3,-3.1 Q-0.5,-2.6 2.1,-3.1 M-2.1,-0.6 Q0.4,-0.1 2.6,-0.6"
@@ -1292,22 +1345,28 @@ interface ChickenVisualProps {
   screenX: number;
   screenY: number;
   timeSec: number;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
  * Renderizador 3D Estilizado das Galinhas (Pipoca e Canjica)
  * - Sombras suaves de contato, plumagem em camadas com brilho de topo e oclusão no peito.
+ * - Recebe iluminação coerente de manhã, meio-dia, fim de tarde e noite mantendo total visibilidade.
  */
 export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
   chicken,
   screenX,
   screenY,
   timeSec,
+  dayLighting,
 }) => {
   const isWalking = chicken.state === 'walking';
   const isPecking = chicken.state === 'pecking';
   const isLooking = chicken.state === 'looking';
   const isIdle = chicken.state === 'idle';
+  const nightW = dayLighting ? dayLighting.nightWeight : 0;
+  const sunsetW = dayLighting ? dayLighting.sunsetWeight : 0;
+  const shadowContrast = dayLighting ? dayLighting.shadowContrast : 1;
 
   const stridePhase = chicken.walkDistance * 21;
 
@@ -1374,19 +1433,36 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
     : Math.sin(timeSec * 2.8 + chicken.seedOffset) * 3;
 
   const isWhite = chicken.featherColor === 'white';
-  const bodyBase = isWhite ? '#FFFBEB' : '#F59E0B';
-  const bodyHighlight = isWhite ? '#FFFFFF' : '#FDE68A';
-  const bodyShade = isWhite ? '#D6D3D1' : '#B45309';
-  const wingColor = isWhite ? '#E7E5E4' : '#D97706';
-  const strokeCol = isWhite ? '#78716C' : '#78350F';
+  const rawBodyBase = isWhite ? '#FFFBEB' : '#F59E0B';
+  const rawBodyHighlight = isWhite ? '#FFFFFF' : '#FDE68A';
+  const rawBodyShade = isWhite ? '#D6D3D1' : '#B45309';
+  const rawWingColor = isWhite ? '#E7E5E4' : '#D97706';
+
+  const bodyBase = interpolateHexColor(
+    interpolateHexColor(rawBodyBase, isWhite ? '#FDE68A' : '#FB923C', sunsetW * 0.25),
+    isWhite ? '#CBD5E1' : '#B4691E',
+    nightW * 0.34
+  );
+  const bodyHighlight = interpolateHexColor(
+    interpolateHexColor(rawBodyHighlight, '#FED7AA', sunsetW * 0.3),
+    isWhite ? '#E2E8F0' : '#D99B42',
+    nightW * 0.36
+  );
+  const bodyShade = interpolateHexColor(rawBodyShade, isWhite ? '#94A3B8' : '#78350F', nightW * 0.35);
+  const wingColor = interpolateHexColor(
+    interpolateHexColor(rawWingColor, isWhite ? '#FCD34D' : '#EA580C', sunsetW * 0.22),
+    isWhite ? '#94A3B8' : '#92400E',
+    nightW * 0.35
+  );
+  const strokeCol = isWhite ? '#64748B' : '#78350F';
   const flip = chicken.facingLeft ? -1 : 1;
 
   return (
     <g transform={`translate(${screenX}, ${screenY})`}>
       {/* Sombra de contato gradual em 3 níveis sob a galinha (penumbra externa, sombra média e núcleo sob o corpo) */}
-      <ellipse cx="-1.2" cy="4.2" rx="11.6" ry="4.9" fill="#0B2E1B" opacity="0.18" />
-      <ellipse cx="-0.6" cy="4.1" rx="8.2" ry="3.5" fill="#072617" opacity="0.24" />
-      <ellipse cx="-0.2" cy="4.0" rx="5.2" ry="2.2" fill="#051B10" opacity="0.22" />
+      <ellipse cx="-1.2" cy="4.2" rx="11.6" ry="4.9" fill="#0B2E1B" opacity={0.18 * shadowContrast} />
+      <ellipse cx="-0.6" cy="4.1" rx="8.2" ry="3.5" fill="#072617" opacity={0.24 * shadowContrast} />
+      <ellipse cx="-0.2" cy="4.0" rx="5.2" ry="2.2" fill="#051B10" opacity={0.22 * shadowContrast} />
 
       <g transform={`scale(${flip}, 1)`}>
         {/* Sombras de contato individuais exatamente sob cada patinha no chão */}
@@ -1715,12 +1791,16 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
             d={`M-6.8,1.9 C-4.4,-1.5 -3.4,-9 -3.0,-16 L${leanX - 1.1},${-50 * hVar} L${
               leanX + 1.1
             },${-50 * hVar} L3.0,-16 C3.4,-9 4.4,-1.5 6.8,1.9 C3.2,3.1 -3.2,3.1 -6.8,1.9 Z`}
-            fill="#4E2712"
+            fill={interpolateHexColor('#4E2712', '#2E1A14', nightW * 0.38)}
           />
-          {/* Face direita do tronco aquecida pela luz solar */}
+          {/* Face direita do tronco aquecida pela luz solar/fim de tarde e suavizada à noite */}
           <path
             d={`M-0.4,2.2 L-0.2,-16 L${leanX + 0.95},${-48 * hVar} L2.7,-16 C3.1,-9 4.0,-1.5 5.9,1.6 C3.2,2.4 0.8,2.4 -0.4,2.2 Z`}
-            fill="#7E4320"
+            fill={interpolateHexColor(
+              interpolateHexColor('#7E4320', '#9E5422', sunsetW * 0.32),
+              '#4A2B1D',
+              nightW * 0.42
+            )}
           />
           {/* Textura sutil da casca e raízes penetrando na terra */}
           <path
@@ -1914,12 +1994,24 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
     const topBX = leanX * 0.85 + (u1 - 0.5) * 2.2;
     const topBY = -29.2 * canopyHeightMod;
 
-    // Paleta própria: folhagem verde-jade suave com subtons quentes e floração rosa-coral/creme
-    const ornDeep = '#1B4D3E';
-    const ornDark = '#266853';
-    const ornMid = '#388E70';
-    const ornLight = '#5BB391';
-    const ornSun = '#8CE0BC';
+    // Paleta própria: folhagem verde-jade suave com subtons quentes no pôr do sol e azul-esverdeado legível à noite
+    const ornDeep = interpolateHexColor('#1B4D3E', '#10332C', nightW * 0.42);
+    const ornDark = interpolateHexColor('#266853', '#18473D', nightW * 0.4);
+    const ornMid = interpolateHexColor(
+      interpolateHexColor('#388E70', '#4A9668', sunsetW * 0.25),
+      '#246353',
+      nightW * 0.38
+    );
+    const ornLight = interpolateHexColor(
+      interpolateHexColor('#5BB391', '#78BA82', sunsetW * 0.32),
+      '#38826E',
+      nightW * 0.42
+    );
+    const ornSun = interpolateHexColor(
+      interpolateHexColor('#8CE0BC', '#BBE09B', sunsetW * 0.38),
+      '#58A68F',
+      nightW * 0.46
+    );
 
     return (
       <g
@@ -1963,14 +2055,18 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
             },${leftBY - 1.5} L-0.8,-15.8 L${topBX - 0.9},${topBY} L${
               topBX + 1.0
             },${topBY} L1.0,-15.8 L${rightBX - 1.7},${rightBY - 1.5} L${rightBX},${rightBY} L2.4,-14.2 C2.6,-6.5 3.5,-1.2 5.2,1.6 C2.2,2.5 -2.2,2.5 -5.2,1.6 Z`}
-            fill="#6E4B2A"
+            fill={interpolateHexColor('#6E4B2A', '#423022', nightW * 0.38)}
           />
           {/* Luz lateral sobre o tronco */}
           <path
             d={`M-0.3,1.8 L0.1,-15.2 L${topBX + 0.9},${topBY} L1.0,-15.8 L${
               rightBX - 0.4
             },${rightBY - 0.5} L2.2,-13.8 C2.4,-6.5 3.2,-1.2 4.6,1.4 C2.4,2.1 0.8,2.1 -0.3,1.8 Z`}
-            fill="#9E7147"
+            fill={interpolateHexColor(
+              interpolateHexColor('#9E7147', '#BA7D43', sunsetW * 0.32),
+              '#5E4532',
+              nightW * 0.42
+            )}
           />
           <path
             d="M-4.4,1.3 Q-2.2,0.3 -0.9,1.8 M4.0,1.2 Q2.0,0.3 0.9,1.8"
@@ -2316,17 +2412,21 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
           },${topBranchY} L1.5,-18.8 L${rightBranchX - 2.1},${
             rightBranchY - 1.9
           } L${rightBranchX},${rightBranchY} L3.8,-16.8 C4.1,-7.2 5.2,-1.2 7.8,1.8 C3.6,3.2 -3.6,3.2 -7.8,1.8 Z`}
-          fill="#542A10"
+          fill={interpolateHexColor('#542A10', '#331C12', nightW * 0.38)}
         />
 
-        {/* Face direita do tronco e galhos aquecida pela luz solar */}
+        {/* Face direita do tronco e galhos aquecida pela luz solar/fim de tarde e suavizada à noite */}
         <path
           d={`M-0.5,2.3 C-0.3,-5.0 -0.1,-11.0 0.2,-17.8 L${
             topBranchX + 1.2
           },${topBranchY} L1.5,-18.8 L${rightBranchX - 0.5},${
             rightBranchY - 0.6
           } L3.5,-16.2 C3.8,-7.0 4.8,-1.2 6.8,1.6 C3.8,2.5 1.0,2.5 -0.5,2.3 Z`}
-          fill="#884B1E"
+          fill={interpolateHexColor(
+            interpolateHexColor('#884B1E', '#A85B20', sunsetW * 0.32),
+            '#4F2E1D',
+            nightW * 0.42
+          )}
         />
 
         {/* Pequena mancha de musgo suave na base sombreada esquerda do tronco */}
@@ -2539,10 +2639,11 @@ interface ShrubVisualProps {
   timeSec: number;
   windStrength: number;
   seed: number;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
- * Arbusto e Moita Orgânica em Camadas com pedrinhas, bagas silvestres e iluminação suave
+ * Arbusto e Moita Orgânica em Camadas com pedrinhas, bagas silvestres e iluminação suave coerente com o horário
  */
 export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
   screenX,
@@ -2553,11 +2654,34 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
   timeSec,
   windStrength,
   seed,
+  dayLighting,
 }) => {
   const swayL = computeBreezeAngle(timeSec, seed + 0.5, windStrength, 1.25);
   const swayR = computeBreezeAngle(timeSec + 0.5, seed + 2.1, windStrength, 1.35);
   const u = seededUnit(seed, 7);
   const wScale = 0.94 + u * 0.14;
+  const nightW = dayLighting ? dayLighting.nightWeight : 0;
+  const sunsetW = dayLighting ? dayLighting.sunsetWeight : 0;
+  const shadowContrast = dayLighting ? dayLighting.shadowContrast : 1;
+
+  const shBack = interpolateHexColor('#133E24', '#0B281B', nightW * 0.42);
+  const shLeftDark = interpolateHexColor('#1E5D34', '#144028', nightW * 0.4);
+  const shLeftLight = interpolateHexColor(
+    interpolateHexColor('#35864B', '#488F48', sunsetW * 0.25),
+    '#24633E',
+    nightW * 0.4
+  );
+  const shRightBase = interpolateHexColor('#287340', '#1B5232', nightW * 0.38);
+  const shRightMid = interpolateHexColor(
+    interpolateHexColor('#54A862', '#6FB058', sunsetW * 0.32),
+    '#347D52',
+    nightW * 0.42
+  );
+  const shRightSun = interpolateHexColor(
+    interpolateHexColor('#85CF8E', '#AED678', sunsetW * 0.38),
+    '#52A176',
+    nightW * 0.46
+  );
 
   return (
     <g
@@ -2565,14 +2689,14 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
       opacity={unlocked ? 1 : 0.45}
     >
       {/* Sombra de contato gradual em 3 camadas projetada suavemente para a esquerda-baixo */}
-      <ellipse cx="-1.6" cy="1.8" rx="14.2" ry="5.6" fill="#0B2E1B" opacity="0.18" />
-      <ellipse cx="-0.8" cy="1.4" rx="10.5" ry="4.2" fill="#072617" opacity="0.25" />
-      <ellipse cx="-0.2" cy="1.1" rx="6.8" ry="2.7" fill="#051B10" opacity="0.3" />
+      <ellipse cx="-1.6" cy="1.8" rx="14.2" ry="5.6" fill="#0B2E1B" opacity={0.18 * shadowContrast} />
+      <ellipse cx="-0.8" cy="1.4" rx="10.5" ry="4.2" fill="#072617" opacity={0.25 * shadowContrast} />
+      <ellipse cx="-0.2" cy="1.1" rx="6.8" ry="2.7" fill="#051B10" opacity={0.3 * shadowContrast} />
 
       {/* Pequena pedra campestre quente ao lado da moita com sombra de assento */}
-      <ellipse cx="-8.9" cy="1.9" rx="2.9" ry="1.5" fill="#072617" opacity="0.28" />
-      <ellipse cx="-8.8" cy="1.6" rx="2.7" ry="1.45" fill="#78716C" />
-      <ellipse cx="-9.1" cy="1.15" rx="1.65" ry="0.8" fill="#D6D3D1" opacity="0.76" />
+      <ellipse cx="-8.9" cy="1.9" rx="2.9" ry="1.5" fill="#072617" opacity={0.28 * shadowContrast} />
+      <ellipse cx="-8.8" cy="1.6" rx="2.7" ry="1.45" fill={interpolateHexColor('#78716C', '#475569', nightW * 0.35)} />
+      <ellipse cx="-9.1" cy="1.15" rx="1.65" ry="0.8" fill={interpolateHexColor('#D6D3D1', '#94A3B8', nightW * 0.38)} opacity="0.76" />
 
       {/* Galhinhos internos da moita */}
       <path
@@ -2585,18 +2709,18 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
       {/* Volume foliar de fundo */}
       <path
         d="M-11.0,0.8 C-13.2,-3.8 -9.2,-9.6 -2.2,-10.2 C3.8,-10.8 9.8,-8.8 11.4,-3.4 C12.0,0 8.8,2.4 0,2.4 C-6.8,2.4 -9.8,1.8 -11.0,0.8 Z"
-        fill="#133E24"
+        fill={shBack}
       />
 
       {/* Tufo Esquerdo */}
       <g transform={`translate(-3.8, -2.2) rotate(${swayL})`}>
         <path
           d="M-7.0,2.2 C-9.2,-1.8 -6.2,-6.8 -0.2,-7.4 C4.4,-7.4 6.6,-3.4 5.4,1.2 C4.2,3.2 -3.4,3.2 -7.0,2.2 Z"
-          fill="#1E5D34"
+          fill={shLeftDark}
         />
         <path
           d="M-4.4,-1.6 C-2.2,-4.8 2.2,-4.8 3.8,-2.0 C4.4,0.2 1.2,1.2 -4.4,-1.6 Z"
-          fill="#35864B"
+          fill={shLeftLight}
           opacity="0.88"
         />
       </g>
@@ -2605,17 +2729,17 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
       <g transform={`translate(3.8, -2.6) rotate(${swayR})`}>
         <path
           d="M-4.4,2.2 C-5.4,-2.0 -2.2,-6.8 3.2,-6.8 C7.8,-6.8 9.8,-2.4 7.8,1.6 C5.8,3.2 -1.0,3.2 -4.4,2.2 Z"
-          fill="#287340"
+          fill={shRightBase}
         />
         <path
           d="M-1.2,-2.6 C1.0,-5.2 5.2,-4.8 6.4,-2.0 C6.8,0.2 3.2,1.2 -1.2,-2.6 Z"
-          fill="#54A862"
+          fill={shRightMid}
           opacity="0.9"
         />
         <path
           d="M1.2,-3.8 C2.8,-5.0 5.0,-4.5 5.6,-2.8 C5.8,-1.5 3.6,-0.8 1.2,-3.8 Z"
-          fill="#85CF8E"
-          opacity="0.72"
+          fill={shRightSun}
+          opacity={0.72 * (1 - nightW * 0.25)}
         />
         {hasBerries && unlocked && (
           <>
@@ -2664,12 +2788,13 @@ interface GroundFloraArtworkProps {
   unlocked: boolean;
   timeSec: number;
   windStrength: number;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
  * Renderizador de Flores Silvestres, Trevos e Tufos de Grama Rasteira
  * - Agrupamentos irregulares determinísticos (margaridas, trevos de 3 folhas, flores campestres e tufos).
- * - Balanço sutil ao vento compartilhando o mesmo ciclo de animação da fazenda.
+ * - Balanço sutil ao vento compartilhando o mesmo ciclo de animação da fazenda e resposta ao ciclo solar/noturno.
  */
 export const IsometricGroundFloraArtwork: React.FC<GroundFloraArtworkProps> = ({
   flora,
@@ -2678,12 +2803,15 @@ export const IsometricGroundFloraArtwork: React.FC<GroundFloraArtworkProps> = ({
   unlocked,
   timeSec,
   windStrength,
+  dayLighting,
 }) => {
   const { kind, colorPrimary = '#FEF08A', colorSecondary = '#FDE047', fallenLeaf, stone, scale, seed } =
     flora;
 
   const sway = computeBreezeAngle(timeSec, seed, windStrength, 1.65);
   const tilt = (seededUnit(seed, 3) - 0.5) * 8;
+  const nightW = dayLighting ? dayLighting.nightWeight : 0;
+  const shadowContrast = dayLighting ? dayLighting.shadowContrast : 1;
 
   return (
     <g
@@ -2692,14 +2820,14 @@ export const IsometricGroundFloraArtwork: React.FC<GroundFloraArtworkProps> = ({
       className="pointer-events-none"
     >
       {/* Sombra de contato suave projetada para a esquerda-baixo */}
-      <ellipse cx="-0.7" cy="0.95" rx="4.6" ry="1.85" fill="#072617" opacity="0.2" />
+      <ellipse cx="-0.7" cy="0.95" rx="4.6" ry="1.85" fill="#072617" opacity={0.2 * shadowContrast} />
 
       {/* Pedrinha campestre quente opcional com sombra de assento */}
       {stone && (
         <g transform="translate(4.4, 1.2)">
-          <ellipse cx="-0.1" cy="0.25" rx="2.25" ry="1.1" fill="#072617" opacity="0.25" />
-          <ellipse cx="0" cy="0" rx="2.1" ry="1.05" fill="#78716C" opacity="0.86" />
-          <ellipse cx="-0.25" cy="-0.3" rx="1.2" ry="0.55" fill="#D6D3D1" opacity="0.74" />
+          <ellipse cx="-0.1" cy="0.25" rx="2.25" ry="1.1" fill="#072617" opacity={0.25 * shadowContrast} />
+          <ellipse cx="0" cy="0" rx="2.1" ry="1.05" fill={interpolateHexColor('#78716C', '#475569', nightW * 0.35)} opacity="0.86" />
+          <ellipse cx="-0.25" cy="-0.3" rx="1.2" ry="0.55" fill={interpolateHexColor('#D6D3D1', '#94A3B8', nightW * 0.38)} opacity="0.74" />
         </g>
       )}
 
@@ -3279,12 +3407,12 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
         opacity={specularOpacity * 0.68}
       />
 
-      {/* Pequenos brilhos solares pontuais na água em tempo ensolarado */}
-      {isSunny && (
-        <g opacity={0.45 + Math.sin(timeSec * 2.6) * 0.2}>
-          <ellipse cx={11 + wavePhase1 * 1.1} cy="-4.6" rx="2.0" ry="0.75" fill="#FEF9C3" />
+      {/* Pequenos brilhos pontuais na água (dourados no sol/tarde, prateados discretos sob o luar) */}
+      {!isRaining && (isSunny || (dayLighting && dayLighting.nightWeight > 0.3)) && (
+        <g opacity={(0.42 + Math.sin(timeSec * 2.6) * 0.18) * (dayLighting ? 1 - dayLighting.nightWeight * 0.3 : 1)}>
+          <ellipse cx={11 + wavePhase1 * 1.1} cy="-4.6" rx="2.0" ry="0.75" fill={skyReflectionColor} />
           <ellipse cx={2 - wavePhase2 * 0.9} cy="-1.0" rx="1.5" ry="0.55" fill="#FFFFFF" />
-          <ellipse cx={16 + wavePhase2 * 0.8} cy="1.2" rx="1.3" ry="0.5" fill="#FEF9C3" />
+          <ellipse cx={16 + wavePhase2 * 0.8} cy="1.2" rx="1.3" ry="0.5" fill={skyReflectionColor} />
         </g>
       )}
 
@@ -3322,11 +3450,11 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
         <ellipse cx="-0.3" cy="0.6" rx="4.9" ry="2.35" fill="#063946" opacity="0.32" />
         <path
           d="M 0,0 L 4.2,-1.0 A 4.8,2.3 0 1,0 4.4,0.6 Z"
-          fill="#2E8540"
+          fill={interpolateHexColor('#2E8540', '#1E5631', dayLighting ? dayLighting.nightWeight * 0.38 : 0)}
         />
         <path
           d="M -0.4,-0.15 L 3.2,-0.8 A 3.6,1.7 0 1,0 3.3,0.35 Z"
-          fill="#4E9A53"
+          fill={interpolateHexColor('#4E9A53', '#2E6E44', dayLighting ? dayLighting.nightWeight * 0.38 : 0)}
           opacity="0.85"
         />
         {/* Flor de ninfeia/lótus delicada */}
@@ -3340,7 +3468,7 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
         <ellipse cx="-0.25" cy="0.5" rx="3.8" ry="1.8" fill="#063946" opacity="0.28" />
         <path
           d="M 0,0 L -3.4,-0.7 A 3.6,1.7 0 1,1 -3.5,0.6 Z"
-          fill="#3FA34D"
+          fill={interpolateHexColor('#3FA34D', '#25633A', dayLighting ? dayLighting.nightWeight * 0.38 : 0)}
         />
       </g>
 
@@ -3352,34 +3480,48 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
         { sx: 36, sy: -2.8, rx: 4.2, ry: 2.0, sub: false },
         { sx: 32, sy: 6.2, rx: 4.8, ry: 2.3, sub: true },
         { sx: -19, sy: 12.4, rx: 4.2, ry: 2.0, sub: false },
-      ].map((st, idx) => (
-        <g key={idx} transform={`translate(${st.sx}, ${st.sy})`}>
-          {/* Sombra de contato/submersão da pedra */}
-          <ellipse cx="-0.4" cy="0.9" rx={st.rx * 1.08} ry={st.ry * 1.08} fill="#072617" opacity="0.32" />
-          {/* Base da pedra campestre quente */}
-          <ellipse cx="0" cy="0" rx={st.rx} ry={st.ry} fill="#78716C" />
-          {/* Topo iluminado pelo sol do topo-direito */}
-          <ellipse
-            cx={st.rx * 0.14}
-            cy={-st.ry * 0.24}
-            rx={st.rx * 0.62}
-            ry={st.ry * 0.54}
-            fill="#D6D3D1"
-            opacity="0.8"
-          />
-          {/* Reflexo úmido na base das pedras parcialmente submersas */}
-          {st.sub && (
-            <path
-              d={`M ${-st.rx * 0.82},${st.ry * 0.55} Q 0,${st.ry * 1.02} ${st.rx * 0.82},${st.ry * 0.55}`}
-              stroke="#BAE6FD"
-              strokeWidth="0.75"
-              fill="none"
-              strokeLinecap="round"
-              opacity="0.55"
+      ].map((st, idx) => {
+        const pNight = dayLighting ? dayLighting.nightWeight : 0;
+        const pSunset = dayLighting ? dayLighting.sunsetWeight : 0;
+        return (
+          <g key={idx} transform={`translate(${st.sx}, ${st.sy})`}>
+            {/* Sombra de contato/submersão da pedra */}
+            <ellipse cx="-0.4" cy="0.9" rx={st.rx * 1.08} ry={st.ry * 1.08} fill="#072617" opacity="0.32" />
+            {/* Base da pedra campestre quente */}
+            <ellipse
+              cx="0"
+              cy="0"
+              rx={st.rx}
+              ry={st.ry}
+              fill={interpolateHexColor('#78716C', '#475569', pNight * 0.38)}
             />
-          )}
-        </g>
-      ))}
+            {/* Topo iluminado pelo sol/tarde ou luar */}
+            <ellipse
+              cx={st.rx * 0.14}
+              cy={-st.ry * 0.24}
+              rx={st.rx * 0.62}
+              ry={st.ry * 0.54}
+              fill={interpolateHexColor(
+                interpolateHexColor('#D6D3D1', '#FDE68A', pSunset * 0.28),
+                '#94A3B8',
+                pNight * 0.4
+              )}
+              opacity="0.8"
+            />
+            {/* Reflexo úmido na base das pedras parcialmente submersas */}
+            {st.sub && (
+              <path
+                d={`M ${-st.rx * 0.82},${st.ry * 0.55} Q 0,${st.ry * 1.02} ${st.rx * 0.82},${st.ry * 0.55}`}
+                stroke={skyReflectionColor}
+                strokeWidth="0.75"
+                fill="none"
+                strokeLinecap="round"
+                opacity="0.55"
+              />
+            )}
+          </g>
+        );
+      })}
 
       {/* 12. Pequenos juncos, taboas e tufos de grama úmida nas margens reagindo à brisa */}
       <g transform={`translate(-31, -6.5) rotate(${reedSwayLeft})`}>
