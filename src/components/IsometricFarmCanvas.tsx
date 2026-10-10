@@ -23,6 +23,7 @@ import {
   IsometricTreeArtwork,
   TreeRenderConfig,
   computeBreezeAngle,
+  computeDayCycleLighting,
 } from './FarmVisualElements';
 
 interface IsometricFarmCanvasProps {
@@ -86,6 +87,12 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
   const windStrength = isBreezy ? 1.35 : isRaining ? 1.2 : 0.85;
 
   const [animTimeSec, setAnimTimeSec] = useState<number>(0);
+
+  // Ciclo visual contínuo de Manhã, Meio do Dia, Fim de Tarde e Noite integrado ao clima
+  const dayLighting = useMemo(
+    () => computeDayCycleLighting(animTimeSec, isRaining, isSunny, isBreezy),
+    [animTimeSec, isRaining, isSunny, isBreezy]
+  );
 
   // ================= MOVIMENTAÇÃO DA TELA ULTRA-FLUIDA (60FPS DIRETO NA GPU SEM RE-RENDER) =================
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -401,32 +408,44 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
+  // Gotas de chuva mais suaves, delicadas e em duas camadas de velocidade/profundidade
   const rainDrops = useMemo(
     () =>
-      Array.from({ length: 42 }).map((_, idx) => ({
-        id: `drop_${idx}`,
-        x: 60 + ((idx * 23) % 900),
-        y: (idx * 37) % 520,
-        delay: `${((idx * 0.13) % 1.15).toFixed(2)}s`,
-        duration: `${(0.85 + (idx % 4) * 0.12).toFixed(2)}s`,
-        length: 18 + (idx % 3) * 6,
-      })),
+      Array.from({ length: 38 }).map((_, idx) => {
+        const isForeground = idx % 3 === 0;
+        return {
+          id: `drop_${idx}`,
+          x: 45 + ((idx * 27) % 920),
+          y: -40 + ((idx * 39) % 180),
+          delay: `${((idx * 0.17) % 2.1).toFixed(2)}s`,
+          duration: `${(1.55 + (idx % 5) * 0.18).toFixed(2)}s`,
+          length: isForeground ? 19 + (idx % 3) * 4 : 13 + (idx % 3) * 3,
+          strokeWidth: isForeground ? 1.25 : 0.9,
+          opacity: isForeground ? 0.52 : 0.34,
+        };
+      }),
     []
   );
 
+  // Impactos de pingos fixos no solo isométrico (ancorados por translate(x,y) para nunca "andarem" pela tela)
   const rainSplashes = useMemo(
-    () =>
-      Array.from({ length: 16 }).map((_, idx) => {
-        const gx = 0.8 + ((idx * 1.7) % 7.4);
-        const gy = 0.8 + ((idx * 2.3) % 7.4);
-        const pt = gridToScreen(gx, gy);
-        return {
-          id: `splash_${idx}`,
-          x: pt.x,
-          y: pt.y,
-          delay: `${((idx * 0.19) % 1.4).toFixed(2)}s`,
-        };
-      }),
+    () => [
+      { id: 'sp_1', gx: 1.35, gy: 2.45, phase: 0.0, zone: 'zone_core' },
+      { id: 'sp_2', gx: 2.45, gy: 1.55, phase: 0.28, zone: 'zone_core' },
+      { id: 'sp_3', gx: 1.65, gy: 4.32, phase: 0.54, zone: 'zone_core' },
+      { id: 'sp_4', gx: 3.45, gy: 3.15, phase: 0.81, zone: 'zone_core' },
+      { id: 'sp_5', gx: 4.35, gy: 2.35, phase: 0.14, zone: 'zone_core' },
+      { id: 'sp_6', gx: 4.25, gy: 4.42, phase: 0.67, zone: 'zone_core' },
+      { id: 'sp_7', gx: 0.82, gy: 3.55, phase: 0.42, zone: 'zone_core' },
+      { id: 'sp_8', gx: 5.85, gy: 2.25, phase: 0.19, zone: 'zone_east' },
+      { id: 'sp_9', gx: 7.15, gy: 3.45, phase: 0.61, zone: 'zone_east' },
+      { id: 'sp_10', gx: 6.45, gy: 1.35, phase: 0.88, zone: 'zone_east' },
+      { id: 'sp_11', gx: 1.75, gy: 6.35, phase: 0.33, zone: 'zone_south' },
+      { id: 'sp_12', gx: 3.65, gy: 6.85, phase: 0.74, zone: 'zone_south' },
+      { id: 'sp_13', gx: 2.25, gy: 8.32, phase: 0.49, zone: 'zone_south' },
+      { id: 'sp_14', gx: 6.25, gy: 6.45, phase: 0.12, zone: 'zone_southeast' },
+      { id: 'sp_15', gx: 7.35, gy: 7.25, phase: 0.57, zone: 'zone_southeast' },
+    ],
     []
   );
 
@@ -1222,10 +1241,12 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
   );
 
   const renderButterflies = () => {
-    if (isRaining) return null;
+    // Borboletas recolhem-se durante chuva ou noite profunda
+    if (isRaining || dayLighting.nightWeight > 0.75) return null;
+    const duskFade = Math.max(0.25, 1 - dayLighting.nightWeight * 1.2);
 
     return (
-      <g className="pointer-events-none">
+      <g className="pointer-events-none" opacity={duskFade}>
         {butterflies.map((bf, idx) => {
           if (!unlockedZoneIds.has(bf.zone)) return null;
 
@@ -1322,6 +1343,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             windStrength={windStrength}
             isRaining={isRaining}
             isSunny={isSunny}
+            dayLighting={dayLighting}
           />
         ),
       });
@@ -1340,7 +1362,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             baseScreenY={pos.y}
             unlocked={unlockedZoneIds.has(b.zone)}
             timeSec={animTimeSec}
-            isRaining={isRaining}
+            isRaining={isRaining || dayLighting.nightWeight > 0.65}
           />
         ),
       });
@@ -1362,7 +1384,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       });
     });
 
-    return items.sort((a, b) => a.depth - b.depth);
+    return items.sort((a, b, ) => a.depth - b.depth);
   }, [
     plots,
     shrubs,
@@ -1377,7 +1399,25 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     windStrength,
     isRaining,
     isSunny,
+    dayLighting,
   ]);
+
+  // Pequeno conjunto estático de estrelas discretas no céu superior (zero animações individuais pesadas)
+  const nightStars = useMemo(
+    () => [
+      { cx: 95, cy: 48, r: 1.35, op: 0.85 },
+      { cx: 185, cy: 32, r: 1.1, op: 0.7 },
+      { cx: 290, cy: 62, r: 1.4, op: 0.9 },
+      { cx: 410, cy: 36, r: 1.15, op: 0.75 },
+      { cx: 540, cy: 28, r: 1.3, op: 0.8 },
+      { cx: 665, cy: 52, r: 1.2, op: 0.72 },
+      { cx: 760, cy: 34, r: 1.45, op: 0.88 },
+      { cx: 910, cy: 64, r: 1.2, op: 0.78 },
+      { cx: 140, cy: 92, r: 1.05, op: 0.65 },
+      { cx: 835, cy: 96, r: 1.15, op: 0.68 },
+    ],
+    []
+  );
 
   return (
     <div
@@ -1390,32 +1430,13 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       style={{ touchAction: 'none' }}
       className="relative w-full h-full flex items-center justify-center overflow-hidden select-none cursor-grab"
     >
-      {/* Fundo atmosférico equilibrado e acolhedor */}
+      {/* Fundo atmosférico contínuo combinando o horário do dia (manhã, dia, fim de tarde, noite) com o clima */}
       <div
-        className={`absolute inset-0 transition-colors duration-1000 pointer-events-none ${
-          isRaining
-            ? 'bg-gradient-to-b from-slate-800 via-sky-900/80 to-emerald-950'
-            : isSunny
-            ? 'bg-gradient-to-b from-amber-100 via-sky-200/75 to-emerald-900'
-            : 'bg-gradient-to-b from-sky-200 via-emerald-100/55 to-emerald-900'
-        }`}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: `linear-gradient(180deg, ${dayLighting.skyTop} 0%, ${dayLighting.skyMid} 54%, ${dayLighting.skyHorizon} 100%)`,
+        }}
       />
-
-      {/* OVERLAY SUTIL DE SOL RADIANTE */}
-      {isSunny && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden z-10">
-          <div className="animate-sun-pulse absolute -top-24 -right-24 w-96 h-96 rounded-full bg-amber-200/35 blur-3xl" />
-          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-amber-100/10 to-amber-200/20" />
-        </div>
-      )}
-
-      {/* OVERLAY SUTIL DE CHUVA FÉRTIL */}
-      {isRaining && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden z-10">
-          <div className="absolute inset-0 bg-sky-950/25 backdrop-blur-[0.5px] transition-opacity duration-700" />
-          <div className="absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-slate-900/45 to-transparent" />
-        </div>
-      )}
 
       <svg
         viewBox="0 0 1000 720"
@@ -1423,32 +1444,23 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         className="w-full h-full max-w-[1100px] max-h-full relative z-0"
       >
         <defs>
-          {/* Paleta de grama campestre naturalista com resposta sutil à luz solar, brisa e chuva */}
+          {/* Paleta de grama campestre naturalista com transição suave entre manhã, meio-dia, fim de tarde e noite */}
           <linearGradient id="islandGrass" x1="78%" y1="6%" x2="22%" y2="96%">
-            <stop
-              offset="0%"
-              stopColor={isRaining ? '#2F7644' : isSunny ? '#6CB65E' : '#61A856'}
-            />
-            <stop
-              offset="48%"
-              stopColor={isRaining ? '#236035' : isSunny ? '#499346' : '#438941'}
-            />
-            <stop
-              offset="100%"
-              stopColor={isRaining ? '#174726' : isSunny ? '#2E6E33' : '#2A652F'}
-            />
+            <stop offset="0%" stopColor={dayLighting.grassTop} />
+            <stop offset="48%" stopColor={dayLighting.grassMid} />
+            <stop offset="100%" stopColor={dayLighting.grassBottom} />
           </linearGradient>
-          {/* Luz solar dourada suave no quadrante nordeste e sombra fresca no sudoeste para dar relevo 3D sutil ao terreno */}
+          {/* Luz direcional suave no quadrante nordeste (dourada de dia/tarde, prateada-azulada à noite) */}
           <radialGradient id="terrainSunGlow" cx="72%" cy="22%" r="64%">
             <stop
               offset="0%"
-              stopColor={isSunny ? '#FEF08A' : isRaining ? '#BAE6FD' : '#FEF9C3'}
-              stopOpacity={isSunny ? '0.2' : isRaining ? '0.05' : '0.13'}
+              stopColor={dayLighting.sunGlowColor}
+              stopOpacity={dayLighting.sunGlowOpacity}
             />
             <stop
               offset="55%"
-              stopColor={isSunny ? '#A3E635' : '#E0F2FE'}
-              stopOpacity={isSunny ? '0.07' : isRaining ? '0.02' : '0.04'}
+              stopColor={dayLighting.sunGlowMidColor}
+              stopOpacity={dayLighting.sunGlowOpacity * 0.35}
             />
             <stop offset="100%" stopColor="#166534" stopOpacity="0" />
           </radialGradient>
@@ -1457,33 +1469,57 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             <stop offset="100%" stopColor={isRaining ? '#3B200B' : '#562F12'} />
           </linearGradient>
           <radialGradient id="pondWater" cx="46%" cy="42%" r="64%">
-            <stop
-              offset="0%"
-              stopColor={isRaining ? '#0369A1' : isSunny ? '#0F766E' : '#0284C7'}
-            />
-            <stop
-              offset="58%"
-              stopColor={isRaining ? '#0284C7' : isSunny ? '#14B8A6' : '#0EA5E9'}
-            />
-            <stop
-              offset="100%"
-              stopColor={isRaining ? '#38BDF8' : isSunny ? '#5EEAD4' : '#38BDF8'}
-            />
+            <stop offset="0%" stopColor={dayLighting.pondDeep} />
+            <stop offset="58%" stopColor={dayLighting.pondMid} />
+            <stop offset="100%" stopColor={dayLighting.pondShallow} />
           </radialGradient>
           <radialGradient id="sunBurst" cx="82%" cy="14%" r="52%">
             <stop
               offset="0%"
-              stopColor="#FEF08A"
-              stopOpacity={isSunny ? '0.4' : '0.2'}
+              stopColor={dayLighting.sunBurstColor}
+              stopOpacity={dayLighting.sunBurstOpacity}
             />
             <stop
               offset="50%"
-              stopColor="#FDE047"
-              stopOpacity={isSunny ? '0.12' : '0.05'}
+              stopColor={dayLighting.sunGlowColor}
+              stopOpacity={dayLighting.sunBurstOpacity * 0.32}
             />
-            <stop offset="100%" stopColor="#FDE047" stopOpacity="0" />
+            <stop offset="100%" stopColor={dayLighting.sunGlowColor} stopOpacity="0" />
           </radialGradient>
         </defs>
+
+        {/* ================= CÉU NOTURNO DISCRETO: PEQUENAS ESTRELAS E LUA ESTILIZADA ================= */}
+        {dayLighting.starOpacity > 0.02 && (
+          <g className="pointer-events-none" opacity={dayLighting.starOpacity}>
+            {nightStars.map((st, idx) => (
+              <circle
+                key={idx}
+                cx={st.cx}
+                cy={st.cy}
+                r={st.r}
+                fill="#F8FAFC"
+                opacity={st.op}
+              />
+            ))}
+          </g>
+        )}
+
+        {dayLighting.moonOpacity > 0.02 && (
+          <g
+            className="pointer-events-none"
+            opacity={dayLighting.moonOpacity}
+            transform={`translate(838, ${74 - dayLighting.nightWeight * 16})`}
+          >
+            {/* Halo luar muito suave sem filtro blur pesado */}
+            <circle cx="0" cy="0" r="26" fill="#BAE6FD" opacity="0.12" />
+            <circle cx="0" cy="0" r="18" fill="#E0F2FE" opacity="0.2" />
+            {/* Lua crescente estilizada aconchegante */}
+            <path
+              d="M -4,-11 A 11.5,11.5 0 1,0 9,8 A 9.2,9.2 0 1,1 -4,-11 Z"
+              fill="#FEF9C3"
+            />
+          </g>
+        )}
 
         <g
           ref={cameraGroupRef}
@@ -1557,7 +1593,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           <polygon
             points={getPolygonPoints(0, 0, 9, 9)}
             fill="url(#islandGrass)"
-            stroke={isRaining ? '#2E7D47' : '#74C365'}
+            stroke={dayLighting.grassStroke}
             strokeWidth="1.6"
           />
 
@@ -1734,6 +1770,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                 isRaining={isRaining}
                 isSunny={isSunny}
                 isBreezy={isBreezy}
+                dayLighting={dayLighting}
               />
             );
           })()}
@@ -1872,22 +1909,67 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           {/* ================= BORBOLETAS CAMPESTRES OCASIONAIS ================= */}
           {renderButterflies()}
 
-          {/* ================= RESPINGOS DE CHUVA NO SOLO ISOMÉTRICO ================= */}
+          {/* ================= RESPINGOS E ONDAS DE CHUVA FIXOS NO SOLO ISOMÉTRICO ================= */}
           {isRaining &&
-            rainSplashes.map((sp) => (
-              <ellipse
-                key={sp.id}
-                cx={sp.x}
-                cy={sp.y}
-                rx="7"
-                ry="3.5"
-                fill="none"
-                stroke="#BAE6FD"
-                strokeWidth="1.4"
-                className="animate-rain-splash pointer-events-none"
-                style={{ animationDelay: sp.delay }}
-              />
-            ))}
+            rainSplashes.map((sp) => {
+              if (!unlockedZoneIds.has(sp.zone)) return null;
+              const pt = gridToScreen(sp.gx, sp.gy);
+              // Ciclo lento e natural de 1.85s por pingo no solo (fixo na coordenada exata pt.x, pt.y)
+              const cycle = (animTimeSec * 0.54 + sp.phase) % 1;
+              // Nos primeiros 65% do ciclo o pingo bate no chão e abre uma pequena onda concêntrica;
+              // nos 35% finais há uma breve pausa antes do próximo pingo cair naquele ponto
+              if (cycle > 0.68) return null;
+              const p = cycle / 0.68; // 0..1 durante o impacto
+              const ringRx = 1.2 + p * 5.8;
+              const ringRy = 0.55 + p * 2.5;
+              const ringOpacity = (1 - p) * 0.46;
+              const crownOpacity = p < 0.45 ? (1 - p / 0.45) * 0.58 : 0;
+              const bounceY = Math.sin(Math.min(1, p * 2.2) * Math.PI) * 3.2;
+
+              return (
+                <g
+                  key={sp.id}
+                  transform={`translate(${pt.x}, ${pt.y})`}
+                  className="pointer-events-none"
+                >
+                  {/* Pequeno anel de água se expandindo no exato ponto de impacto no chão (sem sair do lugar) */}
+                  <ellipse
+                    cx="0"
+                    cy="0"
+                    rx={ringRx}
+                    ry={ringRy}
+                    fill="none"
+                    stroke="#E0F2FE"
+                    strokeWidth="0.95"
+                    opacity={ringOpacity}
+                  />
+                  {/* Micro-gotículas do respingo subindo levemente no instante em que a gota toca o solo */}
+                  {crownOpacity > 0.02 && (
+                    <g opacity={crownOpacity}>
+                      <line
+                        x1="-0.8"
+                        y1="-0.2"
+                        x2={-1.8 - p * 1.4}
+                        y2={-0.6 - bounceY}
+                        stroke="#E0F2FE"
+                        strokeWidth="0.85"
+                        strokeLinecap="round"
+                      />
+                      <line
+                        x1="0.8"
+                        y1="-0.2"
+                        x2={1.6 + p * 1.4}
+                        y2={-0.5 - bounceY * 0.9}
+                        stroke="#E0F2FE"
+                        strokeWidth="0.85"
+                        strokeLinecap="round"
+                      />
+                      <circle cx="0" cy={-0.4 - bounceY * 0.7} r="0.65" fill="#F0F9FF" />
+                    </g>
+                  )}
+                </g>
+              );
+            })}
 
           {/* ================= PLACAS DE EXPANSÃO NOS TERRENOS BLOQUEADOS ================= */}
           {zones
@@ -2001,47 +2083,54 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           })}
         </g>
 
-        {/* ================= EFEITOS ATMOSFÉRICOS DE TELA CHEIA NO SVG ================= */}
-        {(isSunny || isBreezy) && (
-          <g className="pointer-events-none">
+        {/* ================= EFEITOS ATMOSFÉRICOS DE HORÁRIO E CLIMA NO SVG ================= */}
+        <g className="pointer-events-none">
+          {/* Brilho atmosférico superior-direito (solar na manhã/dia/tarde, luar suave à noite) */}
+          {dayLighting.sunBurstOpacity > 0.01 && (
             <rect x="0" y="0" width="1000" height="720" fill="url(#sunBurst)" />
-            {isSunny && (
-              <>
-                <polygon
-                  points="640,0 790,0 490,720 340,720"
-                  fill="#FEF08A"
-                  opacity="0.065"
-                />
-                <polygon
-                  points="820,0 960,0 680,720 550,720"
-                  fill="#FEF08A"
-                  opacity="0.05"
-                />
-              </>
-            )}
-          </g>
-        )}
+          )}
 
-        {isRaining && (
-          <g className="pointer-events-none">
-            {/* Véu atmosférico azul-acinzentado suave unificando a iluminação de chuva sem escurecer demais */}
+          {/* Feixes sutis de luz diagonal quando ensolarado */}
+          {isSunny && dayLighting.rayOpacity > 0.01 && (
+            <>
+              <polygon
+                points="640,0 790,0 490,720 340,720"
+                fill={dayLighting.rayColor}
+                opacity={dayLighting.rayOpacity}
+              />
+              <polygon
+                points="820,0 960,0 680,720 550,720"
+                fill={dayLighting.rayColor}
+                opacity={dayLighting.rayOpacity * 0.78}
+              />
+            </>
+          )}
+
+          {/* Véu atmosférico suave de fim de tarde, noite ou chuva (nunca escurece demais nem cobre a UI) */}
+          {dayLighting.ambientTintOpacity > 0.005 && (
             <rect
               x="0"
               y="0"
               width="1000"
               height="720"
-              fill="#0F172A"
-              opacity="0.08"
+              fill={dayLighting.ambientTintColor}
+              opacity={dayLighting.ambientTintOpacity}
             />
+          )}
+        </g>
+
+        {isRaining && (
+          <g className="pointer-events-none">
             {rainDrops.map((drop) => (
               <line
                 key={drop.id}
                 x1={drop.x}
                 y1={drop.y}
-                x2={drop.x - drop.length * 0.35}
+                x2={drop.x - drop.length * 0.22}
                 y2={drop.y + drop.length}
-                stroke="#BAE6FD"
-                strokeWidth="1.6"
+                stroke="#E0F2FE"
+                strokeWidth={drop.strokeWidth}
+                strokeOpacity={drop.opacity}
                 strokeLinecap="round"
                 className="animate-rain-drop"
                 style={{
@@ -2054,9 +2143,13 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         )}
       </svg>
 
-      {/* Indicador discreto de clima e escala da câmera no canto inferior esquerdo */}
+      {/* Indicador discreto de terreno, período do dia e clima no canto inferior esquerdo */}
       <div className="absolute bottom-3 left-3 pointer-events-none hidden sm:flex items-center gap-2 text-xs font-medium text-emerald-950/90 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-sm">
         <span>Terrenos: {unlockedCount}/4</span>
+        <span aria-hidden="true">·</span>
+        <span>
+          {dayLighting.icon} {dayLighting.label}
+        </span>
         <span aria-hidden="true">·</span>
         <span>
           {isRaining ? '🌧️' : isSunny ? '☀️' : isBreezy ? '⛅' : '☀️'} {weatherMeta.name} ({weatherMeta.badgeText})

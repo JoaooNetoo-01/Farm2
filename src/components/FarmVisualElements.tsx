@@ -35,6 +35,429 @@ export function computeBreezeAngle(
   );
 }
 
+// ============================================================================
+// CICLO VISUAL DE ILUMINAÇÃO AMBIENTAL (MANHÃ, MEIO DO DIA, FIM DE TARDE, NOITE)
+// Independente do relógio real do dispositivo e da economia/crescimento do jogo
+// ============================================================================
+export type DayPhaseName = 'morning' | 'midday' | 'afternoon' | 'night';
+
+export interface DayCycleLightingState {
+  phase: DayPhaseName;
+  label: string;
+  icon: string;
+  cycleProgress: number; // 0..1 ao longo do ciclo contínuo
+  nightWeight: number;   // 0..1 intensidade suave da atmosfera noturna
+  sunsetWeight: number;  // 0..1 intensidade suave do fim de tarde dourado
+  morningWeight: number; // 0..1 intensidade suave da manhã fresca
+  middayWeight: number;  // 0..1 intensidade neutra do meio-dia
+  // Céu
+  skyTop: string;
+  skyMid: string;
+  skyHorizon: string;
+  // Gramado principal (ilha isométrica)
+  grassTop: string;
+  grassMid: string;
+  grassBottom: string;
+  grassStroke: string;
+  // Luz direcional e atmosfera sobre o terreno
+  sunGlowColor: string;
+  sunGlowMidColor: string;
+  sunGlowOpacity: number;
+  sunBurstColor: string;
+  sunBurstOpacity: number;
+  rayColor: string;
+  rayOpacity: number;
+  ambientTintColor: string;
+  ambientTintOpacity: number;
+  // Sombras e realces da vegetação
+  shadowContrast: number;
+  sunHighlightOpacity: number;
+  foliageHighlightTint: string;
+  // Lagoa
+  pondShallow: string;
+  pondMid: string;
+  pondDeep: string;
+  pondReflection: string;
+  pondSpecularOpacity: number;
+  // Astros celestes (Lua e estrelas discretas à noite)
+  starOpacity: number;
+  moonOpacity: number;
+}
+
+function parseHexRGB(hex: string): [number, number, number] {
+  const clean = hex.replace('#', '');
+  const num = parseInt(clean, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+export function interpolateHexColor(hexA: string, hexB: string, t: number): string {
+  const clamped = Math.max(0, Math.min(1, t));
+  const [r1, g1, b1] = parseHexRGB(hexA);
+  const [r2, g2, b2] = parseHexRGB(hexB);
+  const r = Math.round(r1 + (r2 - r1) * clamped);
+  const g = Math.round(g1 + (g2 - g1) * clamped);
+  const b = Math.round(b1 + (b2 - b1) * clamped);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+}
+
+function lerpNumber(a: number, b: number, t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  return a + (b - a) * clamped;
+}
+
+function smoothstep(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
+}
+
+/**
+ * Calcula a iluminação contínua do mundo combinando o horário visual do jogo
+ * (ciclo suave de 160 segundos começando na manhã/meio-dia) com o clima atual (Sol, Brisa, Chuva).
+ */
+export function computeDayCycleLighting(
+  timeSec: number,
+  isRaining: boolean,
+  isSunny: boolean,
+  isBreezy: boolean
+): DayCycleLightingState {
+  // Ciclo completo de 160 segundos (~2min40s), começando em 0.14 (transição manhã -> meio-dia)
+  const CYCLE_DURATION_SEC = 160;
+  const cycleProgress = ((timeSec / CYCLE_DURATION_SEC) + 0.14) % 1;
+
+  // 4 âncoras de período ao longo do ciclo [0..1]:
+  // 0.00: Manhã fresca e luminosa
+  // 0.25: Meio do dia (referência neutra e equilibrada)
+  // 0.55: Fim de tarde acolhedor (luz dourada/alaranjada sutil)
+  // 0.80: Noite azulada suave e totalmente legível
+  interface KeyframePalette {
+    skyTop: string;
+    skyMid: string;
+    skyHorizon: string;
+    grassTop: string;
+    grassMid: string;
+    grassBottom: string;
+    grassStroke: string;
+    sunGlowColor: string;
+    sunGlowMidColor: string;
+    sunGlowOpacity: number;
+    sunBurstColor: string;
+    sunBurstOpacity: number;
+    rayColor: string;
+    rayOpacity: number;
+    ambientTintColor: string;
+    ambientTintOpacity: number;
+    shadowContrast: number;
+    sunHighlightOpacity: number;
+    foliageHighlightTint: string;
+    pondShallow: string;
+    pondMid: string;
+    pondDeep: string;
+    pondReflection: string;
+    pondSpecularOpacity: number;
+    starOpacity: number;
+    moonOpacity: number;
+    nightWeight: number;
+    sunsetWeight: number;
+    morningWeight: number;
+    middayWeight: number;
+  }
+
+  const morningKey: KeyframePalette = {
+    skyTop: '#38BDF8',
+    skyMid: '#93C5FD',
+    skyHorizon: '#FEF3C7',
+    grassTop: '#68B45E',
+    grassMid: '#489146',
+    grassBottom: '#2D6C32',
+    grassStroke: '#74C365',
+    sunGlowColor: '#FDE68A',
+    sunGlowMidColor: '#BAE6FD',
+    sunGlowOpacity: 0.18,
+    sunBurstColor: '#FEF08A',
+    sunBurstOpacity: 0.32,
+    rayColor: '#FEF3C7',
+    rayOpacity: 0.055,
+    ambientTintColor: '#FDE68A',
+    ambientTintOpacity: 0.02,
+    shadowContrast: 0.94,
+    sunHighlightOpacity: 0.84,
+    foliageHighlightTint: '#9AE6B4',
+    pondShallow: '#5EEAD4',
+    pondMid: '#14B8A6',
+    pondDeep: '#0F766E',
+    pondReflection: '#FEF9C3',
+    pondSpecularOpacity: 0.48,
+    starOpacity: 0,
+    moonOpacity: 0,
+    nightWeight: 0,
+    sunsetWeight: 0,
+    morningWeight: 1,
+    middayWeight: 0,
+  };
+
+  const middayKey: KeyframePalette = {
+    skyTop: '#0284C7',
+    skyMid: '#7DD3FC',
+    skyHorizon: '#E0F2FE',
+    grassTop: '#6CB65E',
+    grassMid: '#499346',
+    grassBottom: '#2E6E33',
+    grassStroke: '#74C365',
+    sunGlowColor: '#FEF08A',
+    sunGlowMidColor: '#A3E635',
+    sunGlowOpacity: 0.2,
+    sunBurstColor: '#FEF08A',
+    sunBurstOpacity: 0.38,
+    rayColor: '#FEF08A',
+    rayOpacity: 0.065,
+    ambientTintColor: '#FEF9C3',
+    ambientTintOpacity: 0.0,
+    shadowContrast: 1.05,
+    sunHighlightOpacity: 0.9,
+    foliageHighlightTint: '#8AD89A',
+    pondShallow: '#5EEAD4',
+    pondMid: '#0D9488',
+    pondDeep: '#115E59',
+    pondReflection: '#FEF9C3',
+    pondSpecularOpacity: 0.56,
+    starOpacity: 0,
+    moonOpacity: 0,
+    nightWeight: 0,
+    sunsetWeight: 0,
+    morningWeight: 0,
+    middayWeight: 1,
+  };
+
+  const afternoonKey: KeyframePalette = {
+    skyTop: '#2563EB',
+    skyMid: '#7DD3FC',
+    skyHorizon: '#FDBA74',
+    grassTop: '#69AA52',
+    grassMid: '#48883E',
+    grassBottom: '#2C642C',
+    grassStroke: '#84B858',
+    sunGlowColor: '#FDBA74',
+    sunGlowMidColor: '#FDE047',
+    sunGlowOpacity: 0.22,
+    sunBurstColor: '#FB923C',
+    sunBurstOpacity: 0.34,
+    rayColor: '#FDBA74',
+    rayOpacity: 0.06,
+    ambientTintColor: '#F59E0B',
+    ambientTintOpacity: 0.045,
+    shadowContrast: 1.02,
+    sunHighlightOpacity: 0.88,
+    foliageHighlightTint: '#FCD34D',
+    pondShallow: '#4FD1C5',
+    pondMid: '#0D9488',
+    pondDeep: '#134E4A',
+    pondReflection: '#FED7AA',
+    pondSpecularOpacity: 0.52,
+    starOpacity: 0.12,
+    moonOpacity: 0.15,
+    nightWeight: 0,
+    sunsetWeight: 1,
+    morningWeight: 0,
+    middayWeight: 0,
+  };
+
+  // Noite bonita, azulada e perfeitamente legível (vegetação e caminhos claramente visíveis)
+  const nightKey: KeyframePalette = {
+    skyTop: '#0F172A',
+    skyMid: '#1E293B',
+    skyHorizon: '#334155',
+    grassTop: '#3E7848',
+    grassMid: '#2D5E36',
+    grassBottom: '#1D4226',
+    grassStroke: '#43824E',
+    sunGlowColor: '#93C5FD',
+    sunGlowMidColor: '#38BDF8',
+    sunGlowOpacity: 0.12,
+    sunBurstColor: '#BAE6FD',
+    sunBurstOpacity: 0.16,
+    rayColor: '#93C5FD',
+    rayOpacity: 0.025,
+    ambientTintColor: '#1E3A8A',
+    ambientTintOpacity: 0.11,
+    shadowContrast: 0.76,
+    sunHighlightOpacity: 0.58,
+    foliageHighlightTint: '#6EE7B7',
+    pondShallow: '#38BDF8',
+    pondMid: '#0284C7',
+    pondDeep: '#0C4A6E',
+    pondReflection: '#BAE6FD',
+    pondSpecularOpacity: 0.36,
+    starOpacity: 0.88,
+    moonOpacity: 0.94,
+    nightWeight: 1,
+    sunsetWeight: 0,
+    morningWeight: 0,
+    middayWeight: 0,
+  };
+
+  const stops: Array<{ pos: number; key: KeyframePalette }> = [
+    { pos: 0.0, key: morningKey },
+    { pos: 0.26, key: middayKey },
+    { pos: 0.54, key: afternoonKey },
+    { pos: 0.78, key: nightKey },
+    { pos: 1.0, key: morningKey },
+  ];
+
+  let segIdx = 0;
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (cycleProgress >= stops[i].pos && cycleProgress <= stops[i + 1].pos) {
+      segIdx = i;
+      break;
+    }
+  }
+
+  const startStop = stops[segIdx];
+  const endStop = stops[segIdx + 1];
+  const localT = smoothstep(
+    (cycleProgress - startStop.pos) / Math.max(0.0001, endStop.pos - startStop.pos)
+  );
+
+  const a = startStop.key;
+  const b = endStop.key;
+
+  // Interpola suavemente os valores base do horário
+  let skyTop = interpolateHexColor(a.skyTop, b.skyTop, localT);
+  let skyMid = interpolateHexColor(a.skyMid, b.skyMid, localT);
+  let skyHorizon = interpolateHexColor(a.skyHorizon, b.skyHorizon, localT);
+  let grassTop = interpolateHexColor(a.grassTop, b.grassTop, localT);
+  let grassMid = interpolateHexColor(a.grassMid, b.grassMid, localT);
+  let grassBottom = interpolateHexColor(a.grassBottom, b.grassBottom, localT);
+  let grassStroke = interpolateHexColor(a.grassStroke, b.grassStroke, localT);
+  let sunGlowColor = interpolateHexColor(a.sunGlowColor, b.sunGlowColor, localT);
+  let sunGlowMidColor = interpolateHexColor(a.sunGlowMidColor, b.sunGlowMidColor, localT);
+  let sunGlowOpacity = lerpNumber(a.sunGlowOpacity, b.sunGlowOpacity, localT);
+  let sunBurstColor = interpolateHexColor(a.sunBurstColor, b.sunBurstColor, localT);
+  let sunBurstOpacity = lerpNumber(a.sunBurstOpacity, b.sunBurstOpacity, localT);
+  const rayColor = interpolateHexColor(a.rayColor, b.rayColor, localT);
+  let rayOpacity = lerpNumber(a.rayOpacity, b.rayOpacity, localT);
+  let ambientTintColor = interpolateHexColor(a.ambientTintColor, b.ambientTintColor, localT);
+  let ambientTintOpacity = lerpNumber(a.ambientTintOpacity, b.ambientTintOpacity, localT);
+  let shadowContrast = lerpNumber(a.shadowContrast, b.shadowContrast, localT);
+  let sunHighlightOpacity = lerpNumber(a.sunHighlightOpacity, b.sunHighlightOpacity, localT);
+  const foliageHighlightTint = interpolateHexColor(
+    a.foliageHighlightTint,
+    b.foliageHighlightTint,
+    localT
+  );
+  let pondShallow = interpolateHexColor(a.pondShallow, b.pondShallow, localT);
+  let pondMid = interpolateHexColor(a.pondMid, b.pondMid, localT);
+  let pondDeep = interpolateHexColor(a.pondDeep, b.pondDeep, localT);
+  let pondReflection = interpolateHexColor(a.pondReflection, b.pondReflection, localT);
+  let pondSpecularOpacity = lerpNumber(a.pondSpecularOpacity, b.pondSpecularOpacity, localT);
+  let starOpacity = lerpNumber(a.starOpacity, b.starOpacity, localT);
+  let moonOpacity = lerpNumber(a.moonOpacity, b.moonOpacity, localT);
+
+  const nightWeight = lerpNumber(a.nightWeight, b.nightWeight, localT);
+  const sunsetWeight = lerpNumber(a.sunsetWeight, b.sunsetWeight, localT);
+  const morningWeight = lerpNumber(a.morningWeight, b.morningWeight, localT);
+  const middayWeight = lerpNumber(a.middayWeight, b.middayWeight, localT);
+
+  // Integração harmoniosa com o Clima (sem que um sobrescreva completamente o outro)
+  if (isRaining) {
+    // Chuva + Horário: atmosfera mais fria e úmida, preservando a diferença entre dia chuvoso e noite chuvosa
+    const rainSkyTop = nightWeight > 0.5 ? '#09101D' : '#334155';
+    const rainSkyMid = nightWeight > 0.5 ? '#162235' : '#475569';
+    const rainSkyHorizon = nightWeight > 0.5 ? '#1E293B' : '#64748B';
+    skyTop = interpolateHexColor(skyTop, rainSkyTop, 0.65);
+    skyMid = interpolateHexColor(skyMid, rainSkyMid, 0.65);
+    skyHorizon = interpolateHexColor(skyHorizon, rainSkyHorizon, 0.65);
+
+    grassTop = interpolateHexColor(grassTop, '#2F6E41', 0.45);
+    grassMid = interpolateHexColor(grassMid, '#225632', 0.45);
+    grassBottom = interpolateHexColor(grassBottom, '#163D22', 0.45);
+    grassStroke = interpolateHexColor(grassStroke, '#2E7D47', 0.55);
+
+    sunGlowOpacity *= 0.35;
+    sunBurstOpacity *= 0.25;
+    rayOpacity = 0;
+    shadowContrast *= 0.78;
+    sunHighlightOpacity *= 0.72;
+    pondShallow = interpolateHexColor(pondShallow, '#38BDF8', 0.5);
+    pondMid = interpolateHexColor(pondMid, '#0284C7', 0.5);
+    pondDeep = interpolateHexColor(pondDeep, '#0C4A6E', 0.5);
+    pondReflection = interpolateHexColor(pondReflection, '#BAE6FD', 0.6);
+    pondSpecularOpacity *= 0.58;
+    // Nuvens de chuva encobrem estrelas e suavizam a lua
+    starOpacity *= 0.15;
+    moonOpacity *= 0.32;
+    ambientTintColor = interpolateHexColor(ambientTintColor, '#0F172A', 0.45);
+    ambientTintOpacity = Math.min(0.16, ambientTintOpacity + 0.045);
+  } else if (isBreezy && !isSunny) {
+    // Brisa / Parcialmente nublado: luz levemente mais difusa que o sol pleno
+    skyTop = interpolateHexColor(skyTop, '#475569', 0.14);
+    skyMid = interpolateHexColor(skyMid, '#94A3B8', 0.12);
+    sunGlowOpacity *= 0.82;
+    sunBurstOpacity *= 0.75;
+    rayOpacity *= 0.45;
+    shadowContrast *= 0.92;
+    pondSpecularOpacity *= 0.86;
+  }
+
+  let phase: DayPhaseName = 'midday';
+  let label = 'Dia';
+  let icon = '☀️';
+
+  if (cycleProgress < 0.14 || cycleProgress >= 0.92) {
+    phase = 'morning';
+    label = 'Manhã';
+    icon = '🌅';
+  } else if (cycleProgress < 0.43) {
+    phase = 'midday';
+    label = 'Meio-dia';
+    icon = '☀️';
+  } else if (cycleProgress < 0.66) {
+    phase = 'afternoon';
+    label = 'Fim de Tarde';
+    icon = '🌇';
+  } else {
+    phase = 'night';
+    label = 'Noite';
+    icon = '🌙';
+  }
+
+  return {
+    phase,
+    label,
+    icon,
+    cycleProgress,
+    nightWeight,
+    sunsetWeight,
+    morningWeight,
+    middayWeight,
+    skyTop,
+    skyMid,
+    skyHorizon,
+    grassTop,
+    grassMid,
+    grassBottom,
+    grassStroke,
+    sunGlowColor,
+    sunGlowMidColor,
+    sunGlowOpacity,
+    sunBurstColor,
+    sunBurstOpacity,
+    rayColor,
+    rayOpacity,
+    ambientTintColor,
+    ambientTintOpacity,
+    shadowContrast,
+    sunHighlightOpacity,
+    foliageHighlightTint,
+    pondShallow,
+    pondMid,
+    pondDeep,
+    pondReflection,
+    pondSpecularOpacity,
+    starOpacity,
+    moonOpacity,
+  };
+}
+
 interface CropVisualProps {
   cropType: CropType | null;
   stage: CropStage;
@@ -1157,13 +1580,14 @@ interface IsometricTreeArtworkProps {
   windStrength: number;
   isRaining?: boolean;
   isSunny?: boolean;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
  * Renderizador Botânico 3D Estilizado de Alta Qualidade para as 4 Espécies de Árvores:
- * - Direção única de luz solar vinda do topo-direita.
+ * - Direção única de luz solar/lunar vinda do topo-direita.
  * - Sem contornos pretos pesados: separação dos volumes de folhas feita por sombras internas de oclusão e subtons suaves.
- * - Reação sutil de iluminação, calor solar e contraste de sombra conforme o clima (Sol, Brisa, Chuva).
+ * - Reação sutil de iluminação, calor solar e contraste de sombra conforme o horário (manhã, dia, fim de tarde, noite) e clima.
  * - Variações determinísticas por `seed` e `variant` para que nenhuma árvore pareça copiada e colada.
  * - Integração orgânica da base do tronco com raízes aparentes, musgo sutil, terra e tufos de grama.
  */
@@ -1176,6 +1600,7 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   windStrength,
   isRaining = false,
   isSunny = true,
+  dayLighting,
 }) => {
   const { kind, variant, lean, seed, scale } = tree;
 
@@ -1189,8 +1614,22 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   const canopyHeightMod = 0.94 + u2 * 0.14;
   const asymLeft = (u3 - 0.5) * 3.4;
   const asymRight = (u4 - 0.5) * 3.4;
-  const shadowContrast = isSunny ? 1.08 : isRaining ? 0.78 : 0.94;
-  const sunWarmthOpacity = isSunny ? 0.9 : isRaining ? 0.6 : 0.8;
+  const shadowContrast = dayLighting
+    ? dayLighting.shadowContrast
+    : isSunny
+    ? 1.08
+    : isRaining
+    ? 0.78
+    : 0.94;
+  const sunWarmthOpacity = dayLighting
+    ? dayLighting.sunHighlightOpacity
+    : isSunny
+    ? 0.9
+    : isRaining
+    ? 0.6
+    : 0.8;
+  const nightW = dayLighting ? dayLighting.nightWeight : 0;
+  const sunsetW = dayLighting ? dayLighting.sunsetWeight : 0;
 
   // Oscilações de brisa independentes por agrupamento foliar (tronco permanece 100% imóvel)
   const swayBack = computeBreezeAngle(timeSec, seed + 0.2, windStrength, 0.82);
@@ -1210,12 +1649,22 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
     const hVar = (variant === 0 ? 1.0 : variant === 1 ? 0.94 : 1.06) * canopyHeightMod;
     const wVar = (variant === 0 ? 1.0 : variant === 1 ? 1.08 : 0.95) * canopyWidthMod;
 
-    // Paleta de pinheiro alpino/campestre: sombra azul-esverdeada profunda até verde-oliva solar
-    const pineDeep = '#0E3828';
-    const pineDark = '#174E36';
-    const pineMid = '#236B48';
-    const pineLight = isRaining ? '#317F55' : '#388E5E';
-    const pineSun = isSunny ? '#6BC082' : isRaining ? '#4E9E69' : '#62B57A';
+    // Paleta de pinheiro alpino/campestre modulada suavemente por fim de tarde e noite legível
+    const pineDeep = interpolateHexColor('#0E3828', '#09261E', nightW * 0.45);
+    const pineDark = interpolateHexColor('#174E36', '#113A2B', nightW * 0.42);
+    const pineMid = interpolateHexColor('#236B48', '#1A523B', nightW * 0.38);
+    const basePineLight = isRaining ? '#317F55' : '#388E5E';
+    const pineLight = interpolateHexColor(
+      interpolateHexColor(basePineLight, '#4D9658', sunsetW * 0.28),
+      '#286B4C',
+      nightW * 0.42
+    );
+    const basePineSun = isSunny ? '#6BC082' : isRaining ? '#4E9E69' : '#62B57A';
+    const pineSun = interpolateHexColor(
+      interpolateHexColor(basePineSun, '#98C964', sunsetW * 0.38),
+      '#468F6D',
+      nightW * 0.48
+    );
 
     return (
       <g
@@ -1687,19 +2136,19 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   // ===========================================================================
   const isApple = kind === 'apple';
 
-  // Paleta naturalista: Carvalho (verdes-floresta quentes e dourados no sol) vs Macieira (verdes-pomar frescos e ricos)
-  const leafDeep = isApple ? '#0E3A22' : '#113821';
-  const leafShadow = isApple ? '#164F2E' : '#1B4D2B';
-  const leafDark = isApple ? '#206B3E' : '#286A3A';
-  const leafMid = isApple ? '#2F8A50' : '#3C894B';
-  const leafLight = isRaining
+  // Paleta naturalista: Carvalho e Macieira com resposta gradual ao dourado do fim de tarde e ao azul noturno legível
+  const baseLeafDeep = isApple ? '#0E3A22' : '#113821';
+  const baseLeafShadow = isApple ? '#164F2E' : '#1B4D2B';
+  const baseLeafDark = isApple ? '#206B3E' : '#286A3A';
+  const baseLeafMid = isApple ? '#2F8A50' : '#3C894B';
+  const baseLeafLight = isRaining
     ? isApple
       ? '#439B5D'
       : '#539957'
     : isApple
     ? '#4FAD6A'
     : '#61AB64';
-  const leafSun = isSunny
+  const baseLeafSun = isSunny
     ? isApple
       ? '#8AD89A'
       : '#A0D690'
@@ -1710,6 +2159,25 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
     : isApple
     ? '#82CF92'
     : '#96CE8A';
+
+  const leafDeep = interpolateHexColor(baseLeafDeep, '#092418', nightW * 0.42);
+  const leafShadow = interpolateHexColor(baseLeafShadow, '#113824', nightW * 0.4);
+  const leafDark = interpolateHexColor(baseLeafDark, '#194E32', nightW * 0.38);
+  const leafMid = interpolateHexColor(
+    interpolateHexColor(baseLeafMid, '#4A8E44', sunsetW * 0.22),
+    '#236641',
+    nightW * 0.38
+  );
+  const leafLight = interpolateHexColor(
+    interpolateHexColor(baseLeafLight, '#6EAA52', sunsetW * 0.3),
+    '#328255',
+    nightW * 0.42
+  );
+  const leafSun = interpolateHexColor(
+    interpolateHexColor(baseLeafSun, '#B5D66B', sunsetW * 0.42),
+    '#52A378',
+    nightW * 0.48
+  );
 
   const leftBranchX =
     ((variant === 0 ? -13.8 : variant === 1 ? -15.6 : -12.2) + asymLeft * 0.45) * canopyWidthMod;
@@ -2638,6 +3106,7 @@ export interface IsometricPondArtworkProps {
   isRaining: boolean;
   isSunny: boolean;
   isBreezy: boolean;
+  dayLighting?: DayCycleLightingState;
 }
 
 /**
@@ -2645,7 +3114,7 @@ export interface IsometricPondArtworkProps {
  * - Preserva exatamente a mesma localização e proporção na Zona Sul (gx ~ 2.25, gy ~ 8.32).
  * - Transição gradual de profundidade: margem rasa translúcida -> água intermediária esmeralda/turquesa -> centro profundo.
  * - Borda terrosa úmida, pedras parcialmente submersas, pequenos juncos/taboas que balançam à brisa e vitórias-régias flutuantes.
- * - Ondulações concêntricas sutis, reflexos de luz ambiental dinâmicos conforme o clima e anéis de pingos quando chove.
+ * - Ondulações concêntricas sutis, reflexos de luz ambiental dinâmicos conforme o horário (manhã, dia, fim de tarde, noite) e clima.
  */
 export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
   centerScreenX,
@@ -2656,6 +3125,7 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
   isRaining,
   isSunny,
   isBreezy,
+  dayLighting,
 }) => {
   // Deslocamentos suaves e discretos das linhas d'água e reflexos (reutilizando timeSec sem criar loops extras)
   const wavePhase1 = Math.sin(timeSec * (isBreezy ? 2.05 : 1.42));
@@ -2667,28 +3137,42 @@ export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
   const reedSwayRight = computeBreezeAngle(timeSec + 0.4, 14.6, windStrength, 2.0);
   const lilyBob = Math.sin(timeSec * 1.55 + 0.8) * 0.35;
 
-  // Cores da superfície e reflexos moduladas suavemente pelo clima atual
-  const shallowWaterColor = isRaining
+  // Cores da superfície e reflexos moduladas suavemente pelo ciclo de horário e pelo clima atual
+  const shallowWaterColor = dayLighting
+    ? dayLighting.pondShallow
+    : isRaining
     ? '#38BDF8'
     : isSunny
     ? '#5EEAD4'
     : '#4FD1C5';
-  const midWaterColor = isRaining
+  const midWaterColor = dayLighting
+    ? dayLighting.pondMid
+    : isRaining
     ? '#0284C7'
     : isSunny
     ? '#0D9488'
     : '#0EA5E9';
-  const deepWaterColor = isRaining
+  const deepWaterColor = dayLighting
+    ? dayLighting.pondDeep
+    : isRaining
     ? '#0C4A6E'
     : isSunny
     ? '#115E59'
     : '#0369A1';
-  const skyReflectionColor = isSunny
+  const skyReflectionColor = dayLighting
+    ? dayLighting.pondReflection
+    : isSunny
     ? '#FEF9C3'
     : isRaining
     ? '#BAE6FD'
     : '#E0F2FE';
-  const specularOpacity = isSunny ? 0.56 : isRaining ? 0.25 : 0.42;
+  const specularOpacity = dayLighting
+    ? dayLighting.pondSpecularOpacity
+    : isSunny
+    ? 0.56
+    : isRaining
+    ? 0.25
+    : 0.42;
 
   return (
     <g

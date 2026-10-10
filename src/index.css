@@ -66,29 +66,21 @@
 
 @keyframes rainFall {
   0% {
-    transform: translate3d(12px, -90px, 0);
+    transform: translate3d(18px, -110px, 0);
     opacity: 0;
   }
-  20% {
-    opacity: 0.75;
+  15% {
+    opacity: 0.55;
   }
-  85% {
-    opacity: 0.75;
+  82% {
+    opacity: 0.55;
+  }
+  96% {
+    opacity: 0;
   }
   100% {
-    transform: translate3d(-44px, 760px, 0);
+    transform: translate3d(-32px, 680px, 0);
     opacity: 0;
-  }
-}
-
-@keyframes rainSplash {
-  0%, 100% {
-    transform: scale(0.2);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.15);
-    opacity: 0.65;
   }
 }
 
@@ -104,14 +96,10 @@
 }
 
 .animate-rain-drop {
-  animation: rainFall 1.15s linear infinite;
-}
-
-.animate-rain-splash {
-  animation: rainSplash 1.4s ease-out infinite;
-  transform-origin: center;
+  animation: rainFall 1.75s linear infinite;
 }
 
 .animate-sun-pulse {
   animation: sunPulse 5s ease-in-out infinite;
 }
+
