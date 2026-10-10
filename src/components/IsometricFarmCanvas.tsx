@@ -80,10 +80,19 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
 
   const [animTimeSec, setAnimTimeSec] = useState<number>(0);
 
-  // ================= MOVIMENTAÇÃO DA TELA COM O DEDO / ARRASTO (SEM ALTERAR TAMANHO/ZOOM) =================
+  // ================= MOVIMENTAÇÃO DA TELA ULTRA-FLUIDA (60FPS DIRETO NA GPU SEM RE-RENDER) =================
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const cameraGroupRef = useRef<SVGGElement | null>(null);
+
+  // Guardamos o deslocamento alvo e o atual em refs para interpolar suavemente (LERP) no requestAnimationFrame
+  // sem disparar re-renderizações do React a cada pixel movido pelo dedo
+  const targetPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const currentPanRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const baseCameraRef = useRef<{ x: number; y: number; scale: number }>({
+    x: 35,
+    y: 38,
+    scale: 1.16,
+  });
 
   const dragRef = useRef<{
     active: boolean;
@@ -110,14 +119,38 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     };
   }, []);
 
-  // Quando um novo terreno é desbloqueado, reposiciona suavemente no enquadramento padrão
+  // Atualiza a câmera base conforme os terrenos são desbloqueados
   const prevUnlockedCountRef = useRef<number>(unlockedCount);
   useEffect(() => {
+    const hasEast = unlockedZoneIds.has('zone_east');
+    const hasSouth = unlockedZoneIds.has('zone_south');
+    const hasSE = unlockedZoneIds.has('zone_southeast');
+
+    let baseX = 0;
+    let baseY = -12;
+    let baseScale = 0.94;
+
+    if (!hasEast && !hasSouth && !hasSE) {
+      baseX = 35;
+      baseY = 38;
+      baseScale = 1.16;
+    } else if (hasEast && !hasSouth && !hasSE) {
+      baseX = -25;
+      baseY = 24;
+      baseScale = 1.03;
+    } else if (hasSouth && !hasEast) {
+      baseX = 28;
+      baseY = -10;
+      baseScale = 1.02;
+    }
+
+    baseCameraRef.current = { x: baseX, y: baseY, scale: baseScale };
+
     if (unlockedCount !== prevUnlockedCountRef.current) {
       prevUnlockedCountRef.current = unlockedCount;
-      setPanOffset({ x: 0, y: 0 });
+      targetPanRef.current = { x: 0, y: 0 };
     }
-  }, [unlockedCount]);
+  }, [unlockedZoneIds, unlockedCount]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragRef.current = {
@@ -125,10 +158,13 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      initialPanX: panOffset.x,
-      initialPanY: panOffset.y,
+      initialPanX: targetPanRef.current.x,
+      initialPanY: targetPanRef.current.y,
       movedDistance: 0,
     };
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grabbing';
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -139,25 +175,22 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     const dist = Math.hypot(dx, dy);
     dragRef.current.movedDistance = Math.max(dragRef.current.movedDistance, dist);
 
-    if (dist > 5 && !isDragging) {
-      setIsDragging(true);
-    }
-
-    if (dragRef.current.movedDistance > 5) {
-      // Sensibilidade reduzida (~0.42) para um movimento bem mais sutil, devagar e controlado
-      const panSpeed = 0.42;
-      const nextPan = clampPan(
+    if (dragRef.current.movedDistance > 3) {
+      // Sensibilidade suave (~0.45) atualizando apenas o targetPanRef (zero re-render no React)
+      const panSpeed = 0.45;
+      targetPanRef.current = clampPan(
         dragRef.current.initialPanX + dx * panSpeed,
         dragRef.current.initialPanY + dy * panSpeed
       );
-      setPanOffset(nextPan);
     }
   };
 
   const handlePointerUpOrCancel = () => {
     if (!dragRef.current.active) return;
     dragRef.current.active = false;
-    setIsDragging(false);
+    if (containerRef.current) {
+      containerRef.current.style.cursor = 'grab';
+    }
   };
 
   const [chickens, setChickens] = useState<ChickenEntity[]>([
@@ -221,102 +254,122 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     let animationFrameId: number;
     const startPerf = performance.now();
     let lastPerf = startPerf;
+    let lastReactSyncPerf = startPerf;
 
     const tickScene = (currentPerf: number) => {
       const dt = Math.min(0.08, (currentPerf - lastPerf) / 1000);
       lastPerf = currentPerf;
       const elapsedSec = (currentPerf - startPerf) / 1000;
 
-      setAnimTimeSec(elapsedSec);
+      // 1. Interpola a câmera diretamente no DOM a cada frame (60/120Hz) com amortecimento suave (LERP)
+      const lerpFactor = 1 - Math.exp(-14 * dt);
+      currentPanRef.current.x +=
+        (targetPanRef.current.x - currentPanRef.current.x) * lerpFactor;
+      currentPanRef.current.y +=
+        (targetPanRef.current.y - currentPanRef.current.y) * lerpFactor;
 
-      setChickens((prevChickens) =>
-        prevChickens.map((chk) => {
-          if (chk.state !== 'walking') {
-            const nextTimer = chk.stateTimer - dt;
+      if (cameraGroupRef.current) {
+        const { x: bx, y: by, scale: bScale } = baseCameraRef.current;
+        const tx = (bx + currentPanRef.current.x).toFixed(2);
+        const ty = (by + currentPanRef.current.y).toFixed(2);
+        cameraGroupRef.current.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${bScale})`;
+      }
 
-            const shouldFlipDirection =
-              chk.state === 'looking' &&
-              Math.abs(nextTimer - chk.stateDuration * 0.5) < dt * 0.6;
+      // 2. Sincroniza o estado das animações de plantas/galinhas a ~30fps para deixar a thread livre durante o arrasto
+      if (currentPerf - lastReactSyncPerf >= 32) {
+        const reactDt = Math.min(0.1, (currentPerf - lastReactSyncPerf) / 1000);
+        lastReactSyncPerf = currentPerf;
+        setAnimTimeSec(elapsedSec);
 
-            if (nextTimer <= 0) {
-              const roll = Math.random();
-              if (chk.state === 'idle' && roll < 0.42) {
-                const dur = 1.4 + Math.random() * 0.9;
+        setChickens((prevChickens) =>
+          prevChickens.map((chk) => {
+            if (chk.state !== 'walking') {
+              const nextTimer = chk.stateTimer - reactDt;
+
+              const shouldFlipDirection =
+                chk.state === 'looking' &&
+                Math.abs(nextTimer - chk.stateDuration * 0.5) < reactDt * 0.6;
+
+              if (nextTimer <= 0) {
+                const roll = Math.random();
+                if (chk.state === 'idle' && roll < 0.42) {
+                  const dur = 1.4 + Math.random() * 0.9;
+                  return {
+                    ...chk,
+                    state: 'pecking',
+                    stateTimer: dur,
+                    stateDuration: dur,
+                  };
+                }
+                if (chk.state === 'pecking' && roll < 0.32) {
+                  const dur = 1.0 + Math.random() * 0.8;
+                  return {
+                    ...chk,
+                    state: 'looking',
+                    stateTimer: dur,
+                    stateDuration: dur,
+                  };
+                }
+
+                const { tx, ty } = pickNextChickenTarget(chk.x, chk.y);
+                const screenCurr = gridToScreen(chk.x, chk.y);
+                const screenNext = gridToScreen(tx, ty);
+
                 return {
                   ...chk,
-                  state: 'pecking',
-                  stateTimer: dur,
-                  stateDuration: dur,
+                  targetX: tx,
+                  targetY: ty,
+                  facingLeft: screenNext.x < screenCurr.x,
+                  state: 'walking',
+                  stateTimer: 0,
+                  stateDuration: 0,
                 };
               }
-              if (chk.state === 'pecking' && roll < 0.32) {
-                const dur = 1.0 + Math.random() * 0.8;
-                return {
-                  ...chk,
-                  state: 'looking',
-                  stateTimer: dur,
-                  stateDuration: dur,
-                };
-              }
-
-              const { tx, ty } = pickNextChickenTarget(chk.x, chk.y);
-              const screenCurr = gridToScreen(chk.x, chk.y);
-              const screenNext = gridToScreen(tx, ty);
 
               return {
                 ...chk,
-                targetX: tx,
-                targetY: ty,
-                facingLeft: screenNext.x < screenCurr.x,
-                state: 'walking',
-                stateTimer: 0,
-                stateDuration: 0,
+                facingLeft: shouldFlipDirection ? !chk.facingLeft : chk.facingLeft,
+                stateTimer: nextTimer,
               };
             }
 
+            const dx = chk.targetX - chk.x;
+            const dy = chk.targetY - chk.y;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist < 0.05) {
+              const roll = Math.random();
+              const nextState: ChickenEntity['state'] =
+                roll < 0.55 ? 'pecking' : roll < 0.82 ? 'idle' : 'looking';
+              const dur =
+                nextState === 'pecking'
+                  ? 1.5 + Math.random() * 1.1
+                  : 1.1 + Math.random() * 1.2;
+
+              return {
+                ...chk,
+                x: chk.targetX,
+                y: chk.targetY,
+                state: nextState,
+                stateTimer: dur,
+                stateDuration: dur,
+              };
+            }
+
+            const speed = chk.id === 'chk_1' ? 0.54 : 0.48;
+            const step = Math.min(dist, speed * reactDt);
+            const nx = chk.x + (dx / dist) * step;
+            const ny = chk.y + (dy / dist) * step;
+
             return {
               ...chk,
-              facingLeft: shouldFlipDirection ? !chk.facingLeft : chk.facingLeft,
-              stateTimer: nextTimer,
+              x: nx,
+              y: ny,
+              walkDistance: chk.walkDistance + step,
             };
-          }
-
-          const dx = chk.targetX - chk.x;
-          const dy = chk.targetY - chk.y;
-          const dist = Math.hypot(dx, dy);
-
-          if (dist < 0.05) {
-            const roll = Math.random();
-            const nextState: ChickenEntity['state'] =
-              roll < 0.55 ? 'pecking' : roll < 0.82 ? 'idle' : 'looking';
-            const dur =
-              nextState === 'pecking'
-                ? 1.5 + Math.random() * 1.1
-                : 1.1 + Math.random() * 1.2;
-
-            return {
-              ...chk,
-              x: chk.targetX,
-              y: chk.targetY,
-              state: nextState,
-              stateTimer: dur,
-              stateDuration: dur,
-            };
-          }
-
-          const speed = chk.id === 'chk_1' ? 0.54 : 0.48;
-          const step = Math.min(dist, speed * dt);
-          const nx = chk.x + (dx / dist) * step;
-          const ny = chk.y + (dy / dist) * step;
-
-          return {
-            ...chk,
-            x: nx,
-            y: ny,
-            walkDistance: chk.walkDistance + step,
-          };
-        })
-      );
+          })
+        );
+      }
 
       animationFrameId = requestAnimationFrame(tickScene);
     };
@@ -354,62 +407,43 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     []
   );
 
-  // Vegetação rasteira, flores silvestres, folhas caídas e pedrinhas distribuídas organicamente
+  // Vegetação rasteira, flores silvestres, folhas caídas e pedrinhas distribuídas fora de caminhos, canteiros e bordas
   const grassTufts = useMemo(
     () => [
-      { id: 'gt1', gx: 0.72, gy: 3.12, flower: '#FEF08A', fallenLeaf: '#D97706' },
-      { id: 'gt2', gx: 1.34, gy: 5.12, flower: null, fallenLeaf: null },
-      { id: 'gt3', gx: 4.42, gy: 1.48, flower: '#FBCFE8', fallenLeaf: '#EA580C' },
-      { id: 'gt4', gx: 4.62, gy: 3.58, flower: null, fallenLeaf: '#D97706' },
-      { id: 'gt5', gx: 2.52, gy: 1.18, flower: '#FEF08A', fallenLeaf: null },
-      { id: 'gt6', gx: 5.62, gy: 1.32, flower: '#BAE6FD', fallenLeaf: '#D97706' },
-      { id: 'gt7', gx: 7.22, gy: 4.48, flower: '#FBCFE8', fallenLeaf: null },
-      { id: 'gt8', gx: 2.24, gy: 5.42, flower: '#FEF08A', fallenLeaf: '#EA580C' },
-      { id: 'gt9', gx: 5.32, gy: 7.42, flower: '#FEF08A', fallenLeaf: null },
-      { id: 'gt10', gx: 3.85, gy: 4.82, flower: '#BAE6FD', fallenLeaf: '#D97706' },
-      { id: 'gt11', gx: 1.08, gy: 4.88, flower: '#FBCFE8', fallenLeaf: null },
+      { id: 'gt1', gx: 0.62, gy: 2.95, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: true },
+      { id: 'gt2', gx: 1.52, gy: 5.58, flower: null, fallenLeaf: null, stone: false },
+      { id: 'gt3', gx: 3.85, gy: 1.18, flower: '#FBCFE8', fallenLeaf: '#D97706', stone: false },
+      { id: 'gt4', gx: 4.82, gy: 3.48, flower: null, fallenLeaf: '#C26D1B', stone: true },
+      { id: 'gt5', gx: 2.52, gy: 1.18, flower: '#FEF08A', fallenLeaf: null, stone: false },
+      { id: 'gt6', gx: 5.62, gy: 1.32, flower: '#BAE6FD', fallenLeaf: '#D97706', stone: true },
+      { id: 'gt7', gx: 7.45, gy: 4.35, flower: '#FBCFE8', fallenLeaf: null, stone: false },
+      { id: 'gt8', gx: 4.25, gy: 5.72, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: false },
+      { id: 'gt9', gx: 5.62, gy: 8.15, flower: '#FEF08A', fallenLeaf: null, stone: true },
+      { id: 'gt10', gx: 3.65, gy: 0.82, flower: '#BAE6FD', fallenLeaf: '#D97706', stone: false },
+      { id: 'gt11', gx: 0.65, gy: 5.82, flower: '#FBCFE8', fallenLeaf: null, stone: false },
+      { id: 'gt12', gx: 0.62, gy: 7.82, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: true },
+      { id: 'gt13', gx: 7.85, gy: 2.65, flower: null, fallenLeaf: '#D97706', stone: false },
+      { id: 'gt14', gx: 8.18, gy: 5.45, flower: '#FBCFE8', fallenLeaf: null, stone: true },
     ],
     []
   );
 
-  // Manchas suaves de grama natural e trevos para quebrar a uniformidade do solo
+  // Manchas orgânicas de grama e luz filtrada para quebrar a uniformidade do terreno
   const meadowPatches = useMemo(
     () => [
-      { id: 'mp1', gx: 2.6, gy: 0.9, rx: 32, ry: 15, color: '#86EFAC', opacity: 0.16 },
-      { id: 'mp2', gx: 0.8, gy: 3.6, rx: 28, ry: 13, color: '#15803D', opacity: 0.14 },
-      { id: 'mp3', gx: 4.5, gy: 3.2, rx: 36, ry: 17, color: '#86EFAC', opacity: 0.15 },
-      { id: 'mp4', gx: 6.4, gy: 1.4, rx: 34, ry: 16, color: '#15803D', opacity: 0.13 },
-      { id: 'mp5', gx: 2.5, gy: 5.6, rx: 38, ry: 18, color: '#86EFAC', opacity: 0.14 },
-      { id: 'mp6', gx: 6.5, gy: 5.5, rx: 35, ry: 16, color: '#15803D', opacity: 0.14 },
+      { id: 'mp1', gx: 2.55, gy: 0.88, rx: 38, ry: 18, color: '#8CC97E', opacity: 0.22 },
+      { id: 'mp2', gx: 0.78, gy: 3.65, rx: 32, ry: 15, color: '#276332', opacity: 0.16 },
+      { id: 'mp3', gx: 4.48, gy: 3.15, rx: 40, ry: 19, color: '#8CC97E', opacity: 0.19 },
+      { id: 'mp4', gx: 6.35, gy: 1.42, rx: 36, ry: 17, color: '#276332', opacity: 0.15 },
+      { id: 'mp5', gx: 2.48, gy: 5.55, rx: 42, ry: 20, color: '#8CC97E', opacity: 0.18 },
+      { id: 'mp6', gx: 6.45, gy: 5.45, rx: 38, ry: 18, color: '#276332', opacity: 0.16 },
+      { id: 'mp7', gx: 0.52, gy: 2.28, rx: 28, ry: 13, color: '#1F5229', opacity: 0.2 },
+      { id: 'mp8', gx: 7.75, gy: 3.85, rx: 34, ry: 16, color: '#8CC97E', opacity: 0.17 },
+      { id: 'mp9', gx: 4.35, gy: 7.85, rx: 34, ry: 16, color: '#276332', opacity: 0.17 },
     ],
     []
   );
 
-  const cameraTransform = useMemo(() => {
-    const hasEast = unlockedZoneIds.has('zone_east');
-    const hasSouth = unlockedZoneIds.has('zone_south');
-    const hasSE = unlockedZoneIds.has('zone_southeast');
-
-    let baseX = 0;
-    let baseY = -12;
-    let baseScale = 0.94;
-
-    if (!hasEast && !hasSouth && !hasSE) {
-      baseX = 35;
-      baseY = 38;
-      baseScale = 1.16;
-    } else if (hasEast && !hasSouth && !hasSE) {
-      baseX = -25;
-      baseY = 24;
-      baseScale = 1.03;
-    } else if (hasSouth && !hasEast) {
-      baseX = 28;
-      baseY = -10;
-      baseScale = 1.02;
-    }
-
-    return `translate(${baseX + panOffset.x}px, ${baseY + panOffset.y}px) scale(${baseScale})`;
-  }, [unlockedZoneIds, panOffset.x, panOffset.y]);
 
   // 4 Espécies de Árvores: Carvalho Frondoso ('oak'), Pinheiro ('pine'), Macieira ('apple') e Ornamental Florada ('ornamental')
   const trees = useMemo<TreeRenderConfig[]>(
@@ -987,9 +1021,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       onPointerCancel={handlePointerUpOrCancel}
       onPointerLeave={handlePointerUpOrCancel}
       style={{ touchAction: 'none' }}
-      className={`relative w-full h-full flex items-center justify-center overflow-hidden select-none ${
-        isDragging ? 'cursor-grabbing' : 'cursor-grab'
-      }`}
+      className="relative w-full h-full flex items-center justify-center overflow-hidden select-none cursor-grab"
     >
       {/* Fundo atmosférico equilibrado e acolhedor */}
       <div
@@ -1021,18 +1053,18 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       <svg
         viewBox="0 0 1000 720"
         preserveAspectRatio="xMidYMid slice"
-        className="w-full h-full max-w-[1100px] max-h-full drop-shadow-xl relative z-0"
+        className="w-full h-full max-w-[1100px] max-h-full relative z-0"
       >
         <defs>
-          {/* Paleta de grama natural, equilibrada e sem saturação neon excessiva */}
-          <linearGradient id="islandGrass" x1="20%" y1="0%" x2="80%" y2="100%">
-            <stop offset="0%" stopColor={isRaining ? '#2E7D47' : '#58B359'} />
-            <stop offset="52%" stopColor={isRaining ? '#236839' : '#3F9644'} />
-            <stop offset="100%" stopColor={isRaining ? '#184F2A' : '#2D7834'} />
+          {/* Paleta de grama campestre naturalista, aconchegante e harmoniosa */}
+          <linearGradient id="islandGrass" x1="25%" y1="0%" x2="75%" y2="100%">
+            <stop offset="0%" stopColor={isRaining ? '#2D7342' : '#5EA856'} />
+            <stop offset="52%" stopColor={isRaining ? '#225E34' : '#438C43'} />
+            <stop offset="100%" stopColor={isRaining ? '#174726' : '#2E6E33'} />
           </linearGradient>
           <linearGradient id="soilGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isRaining ? '#5C3516' : '#854D21'} />
-            <stop offset="100%" stopColor={isRaining ? '#3D220C' : '#5E3414'} />
+            <stop offset="0%" stopColor={isRaining ? '#593315' : '#804A20'} />
+            <stop offset="100%" stopColor={isRaining ? '#3B200B' : '#593113'} />
           </linearGradient>
           <linearGradient id="pondWater" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#38BDF8" />
@@ -1046,12 +1078,10 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         </defs>
 
         <g
+          ref={cameraGroupRef}
           style={{
-            transform: cameraTransform,
             transformOrigin: '500px 360px',
-            transition: isDragging
-              ? 'transform 220ms cubic-bezier(0.22, 1, 0.36, 1)'
-              : 'transform 750ms cubic-bezier(0.16, 1, 0.3, 1)',
+            willChange: 'transform',
           }}
         >
           {/* ================= PLATAFORMA BASE DA MAQUETE ISOMÉTRICA (9x9) ================= */}
@@ -1127,10 +1157,11 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             );
           })}
 
-          {/* Ladrilhos da grade isométrica com tonalidades suaves e naturais */}
+          {/* Ladrilhos da grade isométrica com variações discretas de subtom */}
           {Array.from({ length: 9 }).map((_, gx) =>
             Array.from({ length: 9 }).map((__, gy) => {
               const isAlt = (gx + gy) % 2 === 0;
+              const isSubtleWarm = (gx * 3 + gy * 5) % 4 === 0;
               const isEastZone = gx >= 5 && gy < 5;
               const isSouthZone = gx < 5 && gy >= 5;
               const isSEZone = gx >= 5 && gy >= 5;
@@ -1147,15 +1178,17 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                   points={getPolygonPoints(gx, gy, 1, 1)}
                   fill={
                     !zoneUnlocked
-                      ? '#064E3B'
+                      ? '#0A3F28'
                       : isAlt
-                      ? '#68C164'
-                      : '#36873B'
+                      ? isSubtleWarm
+                        ? '#6FB85F'
+                        : '#63B05B'
+                      : '#367E39'
                   }
-                  fillOpacity={!zoneUnlocked ? 0.36 : isRaining ? 0.16 : 0.22}
-                  stroke="#14532D"
-                  strokeOpacity="0.13"
-                  strokeWidth="1"
+                  fillOpacity={!zoneUnlocked ? 0.34 : isRaining ? 0.14 : 0.19}
+                  stroke="#164A25"
+                  strokeOpacity="0.1"
+                  strokeWidth="0.9"
                 />
               );
             })
@@ -1224,12 +1257,20 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             />
           )}
 
-          {/* Tufos de vegetação rasteira, flores silvestres e folhas caídas */}
+          {/* Tufos de vegetação rasteira, flores silvestres, pedrinhas e folhas caídas */}
           {grassTufts.map((gt, idx) => {
             const pt = gridToScreen(gt.gx, gt.gy);
-            const sway = computeBreezeAngle(animTimeSec, idx * 1.7, windStrength, 2.1);
+            const sway = computeBreezeAngle(animTimeSec, idx * 1.7, windStrength, 1.85);
             return (
               <g key={gt.id} transform={`translate(${pt.x}, ${pt.y})`}>
+                {/* Sombra suave sob o tufo */}
+                <ellipse cx="0" cy="0.8" rx="3.8" ry="1.6" fill="#072617" opacity="0.24" />
+                {gt.stone && (
+                  <>
+                    <ellipse cx="4.2" cy="1.2" rx="2.0" ry="1.05" fill="#64748B" opacity="0.82" />
+                    <ellipse cx="4.0" cy="0.9" rx="1.15" ry="0.55" fill="#CBD5E1" opacity="0.7" />
+                  </>
+                )}
                 {gt.fallenLeaf && (
                   <ellipse
                     cx="-4.5"
@@ -1238,19 +1279,20 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                     ry="0.9"
                     transform="rotate(-18 -4.5 1.5)"
                     fill={gt.fallenLeaf}
-                    opacity="0.8"
+                    opacity="0.78"
                   />
                 )}
                 <g transform={`rotate(${sway})`}>
                   <path
-                    d="M0,0 L-3,-5 M0,0 L0,-6.2 M0,0 L3,-5"
-                    stroke="#14532D"
-                    strokeWidth="1.3"
+                    d="M-0.5,0 Q-2.2,-2.8 -3.4,-5.2 M0,0 L0,-6.4 M0.5,0 Q2.2,-2.8 3.4,-5.0"
+                    stroke="#1E562B"
+                    strokeWidth="1.25"
+                    fill="none"
                     strokeLinecap="round"
                   />
                   {gt.flower && (
                     <>
-                      <circle cx="0" cy="-6.8" r="2.0" fill={gt.flower} />
+                      <circle cx="0" cy="-6.8" r="1.95" fill={gt.flower} />
                       <circle cx="0" cy="-6.8" r="0.7" fill="#D97706" />
                     </>
                   )}
@@ -1259,20 +1301,62 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             );
           })}
 
-          {/* Lagoa cristalina na Zona Sul com borda de pedras e plantas aquáticas */}
-          <g opacity={unlockedZoneIds.has('zone_south') ? 1 : 0.35}>
-            <polygon
-              points={getPolygonPoints(1.15, 7.95, 2.3, 0.9)}
-              fill="#64748B"
-              opacity="0.6"
-            />
-            <polygon
-              points={getPolygonPoints(1.2, 8.0, 2.2, 0.8)}
-              fill="url(#pondWater)"
-              stroke="#BAE6FD"
-              strokeWidth="2"
-            />
-          </g>
+          {/* Lagoa campestre orgânica na Zona Sul com margem suave de terra, pedras naturais, juncos e vitória-régia */}
+          {(() => {
+            const pPond = gridToScreen(2.25, 8.32);
+            return (
+              <g
+                transform={`translate(${pPond.x}, ${pPond.y})`}
+                opacity={unlockedZoneIds.has('zone_south') ? 1 : 0.35}
+              >
+                {/* Margem úmida de terra e cascalho */}
+                <path
+                  d="M-44,2 C-48,-8 -28,-17 -2,-18 C24,-19 46,-10 44,1 C42,12 20,18 -4,17 C-28,16 -41,11 -44,2 Z"
+                  fill="#5C4028"
+                  opacity="0.68"
+                />
+                {/* Espelho d'água curvo com profundidade */}
+                <path
+                  d="M-39,1 C-42,-7 -24,-14 -2,-15 C21,-16 40,-8 38,1 C36,10 17,15 -4,14 C-25,13 -36,8 -39,1 Z"
+                  fill="url(#pondWater)"
+                  stroke="#7DD3FC"
+                  strokeWidth="1.2"
+                />
+                {/* Subtom mais escuro de profundidade no centro da lagoa */}
+                <path
+                  d="M-24,0 C-26,-5 -14,-9 0,-9 C15,-9 26,-4 24,1 C22,6 10,9 -3,8 C-16,8 -22,5 -24,0 Z"
+                  fill="#0369A1"
+                  opacity="0.38"
+                />
+                {/* Reflexos suaves de luz solar na água */}
+                <path
+                  d="M-16,-5 Q-6,-7 4,-5 M6,3 Q14,2 21,4"
+                  stroke="#E0F2FE"
+                  strokeWidth="1.1"
+                  fill="none"
+                  strokeLinecap="round"
+                  opacity="0.65"
+                />
+                {/* Pedras arredondadas e tufos de junco na borda */}
+                <ellipse cx="-35" cy="-4" rx="5.2" ry="2.6" fill="#64748B" />
+                <ellipse cx="-36" cy="-4.8" rx="3.2" ry="1.4" fill="#CBD5E1" opacity="0.75" />
+                <ellipse cx="-28" cy="-9" rx="3.6" ry="1.8" fill="#475569" />
+                <ellipse cx="33" cy="6" rx="4.6" ry="2.2" fill="#64748B" />
+                <ellipse cx="32" cy="5.3" rx="2.8" ry="1.1" fill="#CBD5E1" opacity="0.7" />
+                <path
+                  d="M-31,-6 L-33,-14 M-29,-5 L-28,-13 M31,4 L33,-3"
+                  stroke="#1E562B"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+                {/* Vitórias-régias e flor de lótus campestre */}
+                <ellipse cx="-9" cy="-1" rx="4.8" ry="2.3" fill="#2E8540" opacity="0.9" />
+                <circle cx="-8.2" cy="-1.7" r="1.35" fill="#FBCFE8" />
+                <circle cx="-8.2" cy="-1.7" r="0.5" fill="#FDE047" />
+                <ellipse cx="10" cy="2" rx="3.6" ry="1.7" fill="#3FA34D" opacity="0.88" />
+              </g>
+            );
+          })()}
 
           {/* ================= CERCAS DE MADEIRA 3D COM ESPESSURA E SOMBRAS ================= */}
           {(() => {
