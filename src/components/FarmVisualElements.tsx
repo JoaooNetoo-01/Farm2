@@ -11,9 +11,10 @@ function seededUnit(seed: number, offset: number = 0): number {
 }
 
 /**
- * Calcula o ângulo de inclinação suave da brisa (em graus) baseado no tempo real (segundos)
- * e em uma fase única por planta/clump, evitando sincronização artificial.
- * A base (0,0) permanece 100% fixa no solo; apenas caules e pontas giram em torno de (0,0).
+ * Calcula o ângulo de inclinação suave da brisa (em graus) baseado no tempo real (segundos),
+ * propagando uma onda espacial coerente pelo cenário para que árvores, arbustos, flores e
+ * plantações reajam à mesma brisa natural com diferenças orgânicas de fase e amplitude.
+ * A base (0,0) permanece 100% fixa no solo; apenas caules, copas e pontas giram suavemente.
  */
 export function computeBreezeAngle(
   timeSec: number,
@@ -21,10 +22,11 @@ export function computeBreezeAngle(
   windStrength: number = 1,
   maxAmplitudeDeg: number = 2.1
 ): number {
-  const primaryWave = Math.sin(timeSec * 1.42 + phaseSeed * 2.37);
-  const secondaryGust = Math.sin(timeSec * 0.62 + phaseSeed * 4.13) * 0.42;
-  const microFlutter = Math.cos(timeSec * 2.55 + phaseSeed * 5.71) * 0.14;
-  const directionalBias = 0.18 * windStrength;
+  const spatialPhase = phaseSeed * 1.85;
+  const primaryWave = Math.sin(timeSec * 1.32 - spatialPhase);
+  const secondaryGust = Math.sin(timeSec * 0.56 - spatialPhase * 0.65 + 1.4) * 0.44;
+  const microFlutter = Math.cos(timeSec * 2.38 + phaseSeed * 3.9) * 0.12;
+  const directionalBias = 0.22 * windStrength;
 
   return (
     (primaryWave + secondaryGust + microFlutter + directionalBias) *
@@ -890,18 +892,22 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
   const scratchWave = isPecking ? Math.sin(timeSec * 15 + chicken.seedOffset) : 0;
   const isScratchingFoot = isPecking && scratchWave > 0.25;
 
-  const leftLegAngle = isWalking ? Math.sin(stridePhase) * 28 : 0;
+  const leftLegAngle = isWalking ? Math.sin(stridePhase) * 24 : 0;
   const rightLegAngle = isWalking
-    ? -Math.sin(stridePhase) * 28
+    ? -Math.sin(stridePhase) * 24
     : isScratchingFoot
-    ? -22 + scratchWave * 36
+    ? -20 + scratchWave * 32
     : 0;
-  const leftFootLift = isWalking ? Math.max(0, -Math.cos(stridePhase)) * 2.4 : 0;
+  const leftFootLift = isWalking ? Math.max(0, -Math.cos(stridePhase)) * 1.9 : 0;
   const rightFootLift = isWalking
-    ? Math.max(0, Math.cos(stridePhase)) * 2.4
+    ? Math.max(0, Math.cos(stridePhase)) * 1.9
     : isScratchingFoot
-    ? 1.4
+    ? 1.15
     : 0;
+
+  // Calcula a posição aproximada dos pés no solo para ancorar sombras individuais sob cada patinha
+  const leftFootGroundX = -2.2 - Math.sin((leftLegAngle * Math.PI) / 180) * 5.0;
+  const rightFootGroundX = 2.2 - Math.sin((rightLegAngle * Math.PI) / 180) * 5.0;
 
   let peckProgress = 0;
   if (isPecking && chicken.stateDuration > 0) {
@@ -918,13 +924,13 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
       : 0;
 
   const bodyBounceY = isWalking
-    ? -Math.abs(Math.sin(stridePhase)) * 1.6
-    : Math.sin(timeSec * 3.2 + chicken.seedOffset) * 0.4;
+    ? -Math.abs(Math.sin(stridePhase)) * 1.45
+    : Math.sin(timeSec * 3.2 + chicken.seedOffset) * 0.35;
 
   const bodyPitchDeg = isPecking
     ? 8 + peckProgress * 22
     : isWalking
-    ? Math.sin(stridePhase * 2) * 3.5
+    ? Math.sin(stridePhase * 2) * 3.2
     : isLooking
     ? -2.5
     : 0;
@@ -947,58 +953,81 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
   const isWhite = chicken.featherColor === 'white';
   const bodyBase = isWhite ? '#FFFBEB' : '#F59E0B';
   const bodyHighlight = isWhite ? '#FFFFFF' : '#FDE68A';
-  const bodyShade = isWhite ? '#CBD5E1' : '#B45309';
-  const wingColor = isWhite ? '#E2E8F0' : '#D97706';
-  const strokeCol = isWhite ? '#64748B' : '#78350F';
+  const bodyShade = isWhite ? '#D6D3D1' : '#B45309';
+  const wingColor = isWhite ? '#E7E5E4' : '#D97706';
+  const strokeCol = isWhite ? '#78716C' : '#78350F';
   const flip = chicken.facingLeft ? -1 : 1;
 
   return (
     <g transform={`translate(${screenX}, ${screenY})`}>
-      {/* Sombra de contato gradual sob a galinha (consistente com luz do topo-direita) */}
-      <ellipse cx="-0.8" cy="4.2" rx="11.0" ry="4.8" fill="#072617" opacity="0.29" />
-      <ellipse cx="-0.3" cy="4.0" rx="7.0" ry="3.0" fill="#072617" opacity="0.25" />
+      {/* Sombra de contato gradual em 3 níveis sob a galinha (penumbra externa, sombra média e núcleo sob o corpo) */}
+      <ellipse cx="-1.2" cy="4.2" rx="11.6" ry="4.9" fill="#0B2E1B" opacity="0.18" />
+      <ellipse cx="-0.6" cy="4.1" rx="8.2" ry="3.5" fill="#072617" opacity="0.24" />
+      <ellipse cx="-0.2" cy="4.0" rx="5.2" ry="2.2" fill="#051B10" opacity="0.22" />
 
       <g transform={`scale(${flip}, 1)`}>
-        {/* Perna Traseira */}
-        <g
-          transform={`translate(-2.2, -1.5) rotate(${leftLegAngle}) translate(0, ${-leftFootLift})`}
-        >
-          <line
-            x1="0"
-            y1="0"
-            x2="0"
-            y2="5.2"
-            stroke="#C2410C"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-          <path
-            d="M-1.5,5.2 L2.2,5.2 M0,5.2 L1.8,6.2"
-            stroke="#C2410C"
-            strokeWidth="1.2"
-            strokeLinecap="round"
-          />
+        {/* Sombras de contato individuais exatamente sob cada patinha no chão */}
+        <ellipse
+          cx={leftFootGroundX}
+          cy="4.1"
+          rx={2.3 - leftFootLift * 0.35}
+          ry={0.95 - leftFootLift * 0.15}
+          fill="#051B10"
+          opacity={0.36 - leftFootLift * 0.08}
+        />
+        <ellipse
+          cx={rightFootGroundX}
+          cy="4.3"
+          rx={2.4 - rightFootLift * 0.35}
+          ry={1.0 - rightFootLift * 0.15}
+          fill="#051B10"
+          opacity={0.4 - rightFootLift * 0.08}
+        />
+
+        {/* Perna Traseira: eleva o quadril primeiro e gira a canela mantendo os dedos horizontais ao solo */}
+        <g transform={`translate(-2.2, ${-1.4 - leftFootLift})`}>
+          <g transform={`rotate(${leftLegAngle})`}>
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="5.1"
+              stroke="#B45309"
+              strokeWidth="1.55"
+              strokeLinecap="round"
+            />
+            <g transform={`translate(0, 5.1) rotate(${-leftLegAngle * 0.82})`}>
+              <path
+                d="M-1.5,0 L2.2,0 M0,0 L1.8,0.85"
+                stroke="#B45309"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </g>
+          </g>
         </g>
 
-        {/* Perna Frontal (com animação de ciscar a terra) */}
-        <g
-          transform={`translate(2.2, -1.2) rotate(${rightLegAngle}) translate(0, ${-rightFootLift})`}
-        >
-          <line
-            x1="0"
-            y1="0"
-            x2="0"
-            y2="5.2"
-            stroke="#EA580C"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          />
-          <path
-            d="M-1.5,5.2 L2.4,5.2 M0,5.2 L2,6.2"
-            stroke="#EA580C"
-            strokeWidth="1.3"
-            strokeLinecap="round"
-          />
+        {/* Perna Frontal (com dedos articulados paralelos ao chão e movimento de ciscar) */}
+        <g transform={`translate(2.2, ${-1.1 - rightFootLift})`}>
+          <g transform={`rotate(${rightLegAngle})`}>
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="5.1"
+              stroke="#EA580C"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+            />
+            <g transform={`translate(0, 5.1) rotate(${-rightLegAngle * 0.82})`}>
+              <path
+                d="M-1.5,0 L2.4,0 M0,0 L2.0,0.85"
+                stroke="#EA580C"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </g>
+          </g>
         </g>
 
         {/* Corpo Articulado */}
@@ -1126,12 +1155,15 @@ interface IsometricTreeArtworkProps {
   unlocked: boolean;
   timeSec: number;
   windStrength: number;
+  isRaining?: boolean;
+  isSunny?: boolean;
 }
 
 /**
  * Renderizador Botânico 3D Estilizado de Alta Qualidade para as 4 Espécies de Árvores:
  * - Direção única de luz solar vinda do topo-direita.
  * - Sem contornos pretos pesados: separação dos volumes de folhas feita por sombras internas de oclusão e subtons suaves.
+ * - Reação sutil de iluminação, calor solar e contraste de sombra conforme o clima (Sol, Brisa, Chuva).
  * - Variações determinísticas por `seed` e `variant` para que nenhuma árvore pareça copiada e colada.
  * - Integração orgânica da base do tronco com raízes aparentes, musgo sutil, terra e tufos de grama.
  */
@@ -1142,6 +1174,8 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   unlocked,
   timeSec,
   windStrength,
+  isRaining = false,
+  isSunny = true,
 }) => {
   const { kind, variant, lean, seed, scale } = tree;
 
@@ -1155,13 +1189,15 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   const canopyHeightMod = 0.94 + u2 * 0.14;
   const asymLeft = (u3 - 0.5) * 3.4;
   const asymRight = (u4 - 0.5) * 3.4;
+  const shadowContrast = isSunny ? 1.08 : isRaining ? 0.78 : 0.94;
+  const sunWarmthOpacity = isSunny ? 0.9 : isRaining ? 0.6 : 0.8;
 
   // Oscilações de brisa independentes por agrupamento foliar (tronco permanece 100% imóvel)
-  const swayBack = computeBreezeAngle(timeSec, seed + 0.2, windStrength, 0.75);
-  const swayLeft = computeBreezeAngle(timeSec + 0.3, seed + 1.4, windStrength, 1.25);
-  const swayRight = computeBreezeAngle(timeSec + 0.7, seed + 2.7, windStrength, 1.35);
-  const swayTop = computeBreezeAngle(timeSec + 1.1, seed + 3.9, windStrength, 1.45);
-  const swayFront = computeBreezeAngle(timeSec + 1.5, seed + 5.1, windStrength, 1.05);
+  const swayBack = computeBreezeAngle(timeSec, seed + 0.2, windStrength, 0.82);
+  const swayLeft = computeBreezeAngle(timeSec + 0.3, seed + 1.4, windStrength, 1.38);
+  const swayRight = computeBreezeAngle(timeSec + 0.7, seed + 2.7, windStrength, 1.48);
+  const swayTop = computeBreezeAngle(timeSec + 1.1, seed + 3.9, windStrength, 1.62);
+  const swayFront = computeBreezeAngle(timeSec + 1.5, seed + 5.1, windStrength, 1.18);
 
   const leanX = lean * 3.8;
 
@@ -1178,29 +1214,39 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
     const pineDeep = '#0E3828';
     const pineDark = '#174E36';
     const pineMid = '#236B48';
-    const pineLight = '#388E5E';
-    const pineSun = '#62B57A';
+    const pineLight = isRaining ? '#317F55' : '#388E5E';
+    const pineSun = isSunny ? '#6BC082' : isRaining ? '#4E9E69' : '#62B57A';
 
     return (
       <g
         transform={`translate(${screenX}, ${screenY}) scale(${scale})`}
         opacity={unlocked ? 1 : 0.46}
       >
-        {/* 1. Sombra projetada suave para a esquerda-baixo (luz solar vinda do topo-direita) */}
+        {/* 1. Sombra projetada em 3 camadas graduais (penumbra da copa, sombra média e oclusão de raízes) */}
         <ellipse
-          cx={-4.8 + leanX * 0.35}
-          cy="2.2"
-          rx={21.0 * wVar}
-          ry={9.2 * wVar}
-          fill="#072617"
-          opacity="0.24"
+          cx={-5.2 + leanX * 0.35}
+          cy="2.4"
+          rx={22.8 * wVar}
+          ry={10.0 * wVar}
+          fill="#0B2E1B"
+          opacity={0.16 * shadowContrast}
         />
-        <ellipse cx="-0.8" cy="1.2" rx="10.6" ry="4.5" fill="#072617" opacity="0.4" />
-        <ellipse cx="0" cy="0.9" rx="8.0" ry="3.3" fill="#4A2C14" opacity="0.76" />
+        <ellipse
+          cx={-2.6 + leanX * 0.2}
+          cy="1.8"
+          rx={15.2 * wVar}
+          ry={6.6 * wVar}
+          fill="#072617"
+          opacity={0.24 * shadowContrast}
+        />
+        <ellipse cx="-0.6" cy="1.2" rx="9.8" ry="4.2" fill="#051B10" opacity={0.38 * shadowContrast} />
+        {/* Base de grama sombreada e terra integradas ao solo */}
+        <ellipse cx="0" cy="1.1" rx="8.8" ry="3.6" fill="#21542C" opacity="0.55" />
+        <ellipse cx="0" cy="0.9" rx="7.2" ry="2.9" fill="#4A2C14" opacity="0.72" />
 
-        {/* Agulhas secas e pedrinha natural ao pé do pinheiro */}
+        {/* Agulhas secas e pedrinha campestre quente ao pé do pinheiro */}
         <ellipse cx="-5.8" cy="1.7" rx="2.1" ry="0.9" fill="#8C5828" opacity="0.65" />
-        <ellipse cx="5.2" cy="1.9" rx="1.8" ry="0.8" fill="#708090" opacity="0.7" />
+        <ellipse cx="5.2" cy="1.9" rx="1.8" ry="0.8" fill="#78716C" opacity="0.72" />
 
         {/* 2. Folhagem traseira de fundo (dá volume atrás do tronco) */}
         <g transform={`translate(${leanX * 0.25}, ${-16 * hVar}) rotate(${swayBack})`}>
@@ -1431,17 +1477,26 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
         transform={`translate(${screenX}, ${screenY}) scale(${scale})`}
         opacity={unlocked ? 1 : 0.46}
       >
-        {/* Sombra projetada suave para a esquerda-baixo e oclusão de solo */}
+        {/* Sombra projetada em 3 camadas graduais e oclusão de solo */}
         <ellipse
-          cx={-4.2 + leanX * 0.35}
-          cy="1.9"
-          rx={18.5 * canopyWidthMod}
-          ry={8.0 * canopyWidthMod}
-          fill="#072617"
-          opacity="0.23"
+          cx={-4.8 + leanX * 0.35}
+          cy="2.1"
+          rx={19.8 * canopyWidthMod}
+          ry={8.6 * canopyWidthMod}
+          fill="#0B2E1B"
+          opacity={0.16 * shadowContrast}
         />
-        <ellipse cx="-0.6" cy="1.0" rx="8.4" ry="3.6" fill="#072617" opacity="0.4" />
-        <ellipse cx="0" cy="0.8" rx="6.6" ry="2.8" fill="#523318" opacity="0.72" />
+        <ellipse
+          cx={-2.2 + leanX * 0.2}
+          cy="1.5"
+          rx={13.2 * canopyWidthMod}
+          ry={5.8 * canopyWidthMod}
+          fill="#072617"
+          opacity={0.23 * shadowContrast}
+        />
+        <ellipse cx="-0.5" cy="1.0" rx="8.0" ry="3.4" fill="#051B10" opacity={0.36 * shadowContrast} />
+        <ellipse cx="0" cy="1.0" rx="7.2" ry="3.0" fill="#21542C" opacity="0.52" />
+        <ellipse cx="0" cy="0.8" rx="6.0" ry="2.5" fill="#523318" opacity="0.68" />
 
         {/* Camada foliar traseira unificadora com contornos lobados suaves */}
         <g transform={`translate(${leanX * 0.3}, -21.2) rotate(${swayBack})`}>
@@ -1637,8 +1692,24 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
   const leafShadow = isApple ? '#164F2E' : '#1B4D2B';
   const leafDark = isApple ? '#206B3E' : '#286A3A';
   const leafMid = isApple ? '#2F8A50' : '#3C894B';
-  const leafLight = isApple ? '#4FAD6A' : '#61AB64';
-  const leafSun = isApple ? '#82CF92' : '#96CE8A';
+  const leafLight = isRaining
+    ? isApple
+      ? '#439B5D'
+      : '#539957'
+    : isApple
+    ? '#4FAD6A'
+    : '#61AB64';
+  const leafSun = isSunny
+    ? isApple
+      ? '#8AD89A'
+      : '#A0D690'
+    : isRaining
+    ? isApple
+      ? '#6AB87B'
+      : '#7CB874'
+    : isApple
+    ? '#82CF92'
+    : '#96CE8A';
 
   const leftBranchX =
     ((variant === 0 ? -13.8 : variant === 1 ? -15.6 : -12.2) + asymLeft * 0.45) * canopyWidthMod;
@@ -1705,19 +1776,28 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
       transform={`translate(${screenX}, ${screenY}) scale(${scale})`}
       opacity={unlocked ? 1 : 0.46}
     >
-      {/* 1. Sombra projetada suave para a esquerda-baixo (consistente com luz solar do topo-direita) */}
+      {/* 1. Sombra projetada em 3 camadas graduais (penumbra da copa, sombra média e oclusão firme sob o tronco) */}
       <ellipse
-        cx={-4.6 + leanX * 0.35}
-        cy="2.1"
-        rx={22.0 * canopyWidthMod}
-        ry={9.5 * canopyWidthMod}
-        fill="#072617"
-        opacity="0.25"
+        cx={-5.2 + leanX * 0.35}
+        cy="2.3"
+        rx={23.6 * canopyWidthMod}
+        ry={10.2 * canopyWidthMod}
+        fill="#0B2E1B"
+        opacity={0.17 * shadowContrast}
       />
-      <ellipse cx="-0.8" cy="1.1" rx="10.2" ry="4.4" fill="#072617" opacity="0.43" />
+      <ellipse
+        cx={-2.4 + leanX * 0.2}
+        cy="1.6"
+        rx={15.8 * canopyWidthMod}
+        ry={6.8 * canopyWidthMod}
+        fill="#072617"
+        opacity={0.24 * shadowContrast}
+      />
+      <ellipse cx="-0.6" cy="1.1" rx="9.6" ry="4.1" fill="#051B10" opacity={0.39 * shadowContrast} />
 
-      {/* 2. Colar de terra, raízes aparentes e vegetação rasteira traseira */}
-      <ellipse cx="0" cy="0.9" rx="8.2" ry="3.4" fill="#4A2C14" opacity="0.8" />
+      {/* 2. Colar de grama sombreada, terra, raízes aparentes e vegetação rasteira traseira */}
+      <ellipse cx="0" cy="1.1" rx="8.8" ry="3.7" fill="#21542C" opacity="0.55" />
+      <ellipse cx="0" cy="0.9" rx="7.4" ry="3.1" fill="#4A2C14" opacity="0.74" />
       <path
         d="M-7.4,0.5 L-9.2,-3.0 M7.2,0.5 L9.0,-2.8"
         stroke="#255E34"
@@ -1912,7 +1992,7 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
         <path
           d="M-0.8,-6.2 C1.8,-8.8 6.2,-8.4 7.8,-5.6 C8.4,-3.4 5.2,-1.4 1.8,-1.8 C-0.8,-2.2 -2.2,-4.2 -0.8,-6.2 Z"
           fill={leafSun}
-          opacity="0.85"
+          opacity={sunWarmthOpacity}
         />
         {isApple && unlocked && (
           <>
@@ -1950,12 +2030,13 @@ export const IsometricTreeArtwork: React.FC<IsometricTreeArtworkProps> = ({
         {isApple && unlocked && renderAppleFruit(6.4, 0.4, 2.35, false, 'ap_f1')}
       </g>
 
-      {/* 7. Integração ao solo: pedrinhas campestres, fruto/folha caída e tufos de grama */}
-      <ellipse cx="-5.4" cy="1.9" rx="2.1" ry="1.05" fill="#64748B" opacity="0.82" />
-      <ellipse cx="-5.6" cy="1.6" rx="1.25" ry="0.55" fill="#CBD5E1" opacity="0.72" />
+      {/* 7. Integração ao solo: pedrinha campestre quente, fruto/folha caída e tufos de grama */}
+      <ellipse cx="-5.4" cy="2.1" rx="2.3" ry="1.1" fill="#072617" opacity="0.28" />
+      <ellipse cx="-5.4" cy="1.9" rx="2.1" ry="1.05" fill="#78716C" opacity="0.85" />
+      <ellipse cx="-5.6" cy="1.6" rx="1.25" ry="0.55" fill="#D6D3D1" opacity="0.72" />
       {isApple && unlocked ? (
         <g transform="translate(5.8, 2.1)">
-          <ellipse cx="0.2" cy="0.6" rx="1.8" ry="0.8" fill="#072617" opacity="0.4" />
+          <ellipse cx="-0.2" cy="0.6" rx="1.8" ry="0.8" fill="#072617" opacity="0.38" />
           <circle cx="0" cy="0" r="1.65" fill="#DC2626" />
           <circle cx="0.4" cy="-0.4" r="0.55" fill="#FCA5A5" />
         </g>
@@ -2015,13 +2096,15 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
       transform={`translate(${screenX}, ${screenY}) scale(${scale * wScale}, ${scale})`}
       opacity={unlocked ? 1 : 0.45}
     >
-      {/* Sombra de contato projetada suavemente para a esquerda-baixo */}
-      <ellipse cx="-1.2" cy="1.6" rx="13.0" ry="5.2" fill="#072617" opacity="0.31" />
-      <ellipse cx="-0.4" cy="1.2" rx="8.8" ry="3.5" fill="#072617" opacity="0.26" />
+      {/* Sombra de contato gradual em 3 camadas projetada suavemente para a esquerda-baixo */}
+      <ellipse cx="-1.6" cy="1.8" rx="14.2" ry="5.6" fill="#0B2E1B" opacity="0.18" />
+      <ellipse cx="-0.8" cy="1.4" rx="10.5" ry="4.2" fill="#072617" opacity="0.25" />
+      <ellipse cx="-0.2" cy="1.1" rx="6.8" ry="2.7" fill="#051B10" opacity="0.3" />
 
-      {/* Pequena pedra campestre ao lado da moita */}
-      <ellipse cx="-8.8" cy="1.6" rx="2.7" ry="1.45" fill="#64748B" />
-      <ellipse cx="-9.1" cy="1.15" rx="1.65" ry="0.8" fill="#CBD5E1" opacity="0.78" />
+      {/* Pequena pedra campestre quente ao lado da moita com sombra de assento */}
+      <ellipse cx="-8.9" cy="1.9" rx="2.9" ry="1.5" fill="#072617" opacity="0.28" />
+      <ellipse cx="-8.8" cy="1.6" rx="2.7" ry="1.45" fill="#78716C" />
+      <ellipse cx="-9.1" cy="1.15" rx="1.65" ry="0.8" fill="#D6D3D1" opacity="0.76" />
 
       {/* Galhinhos internos da moita */}
       <path
@@ -2141,13 +2224,14 @@ export const IsometricGroundFloraArtwork: React.FC<GroundFloraArtworkProps> = ({
       className="pointer-events-none"
     >
       {/* Sombra de contato suave projetada para a esquerda-baixo */}
-      <ellipse cx="-0.6" cy="0.9" rx="4.4" ry="1.8" fill="#072617" opacity="0.22" />
+      <ellipse cx="-0.7" cy="0.95" rx="4.6" ry="1.85" fill="#072617" opacity="0.2" />
 
-      {/* Pedrinha campestre opcional */}
+      {/* Pedrinha campestre quente opcional com sombra de assento */}
       {stone && (
         <g transform="translate(4.4, 1.2)">
-          <ellipse cx="0" cy="0" rx="2.1" ry="1.05" fill="#64748B" opacity="0.84" />
-          <ellipse cx="-0.25" cy="-0.3" rx="1.2" ry="0.55" fill="#CBD5E1" opacity="0.72" />
+          <ellipse cx="-0.1" cy="0.25" rx="2.25" ry="1.1" fill="#072617" opacity="0.25" />
+          <ellipse cx="0" cy="0" rx="2.1" ry="1.05" fill="#78716C" opacity="0.86" />
+          <ellipse cx="-0.25" cy="-0.3" rx="1.2" ry="0.55" fill="#D6D3D1" opacity="0.74" />
         </g>
       )}
 
@@ -2540,3 +2624,336 @@ export const IsometricBirdArtwork: React.FC<IsometricBirdArtworkProps> = ({
     </g>
   );
 };
+
+// ============================================================================
+// ELEMENTO AMBIENTAL 4: LAGOA NATURAL COM PROFUNDIDADE, MARGENS ORGÂNICAS,
+// VEGETAÇÃO AQUÁTICA E ONDULAÇÕES SUAVES DE ÁGUA
+// ============================================================================
+export interface IsometricPondArtworkProps {
+  centerScreenX: number;
+  centerScreenY: number;
+  unlocked: boolean;
+  timeSec: number;
+  windStrength: number;
+  isRaining: boolean;
+  isSunny: boolean;
+  isBreezy: boolean;
+}
+
+/**
+ * Lagoa Campestre Natural 3D Isométrica
+ * - Preserva exatamente a mesma localização e proporção na Zona Sul (gx ~ 2.25, gy ~ 8.32).
+ * - Transição gradual de profundidade: margem rasa translúcida -> água intermediária esmeralda/turquesa -> centro profundo.
+ * - Borda terrosa úmida, pedras parcialmente submersas, pequenos juncos/taboas que balançam à brisa e vitórias-régias flutuantes.
+ * - Ondulações concêntricas sutis, reflexos de luz ambiental dinâmicos conforme o clima e anéis de pingos quando chove.
+ */
+export const IsometricPondArtwork: React.FC<IsometricPondArtworkProps> = ({
+  centerScreenX,
+  centerScreenY,
+  unlocked,
+  timeSec,
+  windStrength,
+  isRaining,
+  isSunny,
+  isBreezy,
+}) => {
+  // Deslocamentos suaves e discretos das linhas d'água e reflexos (reutilizando timeSec sem criar loops extras)
+  const wavePhase1 = Math.sin(timeSec * (isBreezy ? 2.05 : 1.42));
+  const wavePhase2 = Math.cos(timeSec * (isBreezy ? 1.7 : 1.15) + 1.3);
+  const shimmerScale = 0.94 + Math.sin(timeSec * 1.8) * 0.06;
+
+  // Balanço suave dos juncos/plantas aquáticas da margem acompanhando a brisa da fazenda
+  const reedSwayLeft = computeBreezeAngle(timeSec, 9.2, windStrength, 2.2);
+  const reedSwayRight = computeBreezeAngle(timeSec + 0.4, 14.6, windStrength, 2.0);
+  const lilyBob = Math.sin(timeSec * 1.55 + 0.8) * 0.35;
+
+  // Cores da superfície e reflexos moduladas suavemente pelo clima atual
+  const shallowWaterColor = isRaining
+    ? '#38BDF8'
+    : isSunny
+    ? '#5EEAD4'
+    : '#4FD1C5';
+  const midWaterColor = isRaining
+    ? '#0284C7'
+    : isSunny
+    ? '#0D9488'
+    : '#0EA5E9';
+  const deepWaterColor = isRaining
+    ? '#0C4A6E'
+    : isSunny
+    ? '#115E59'
+    : '#0369A1';
+  const skyReflectionColor = isSunny
+    ? '#FEF9C3'
+    : isRaining
+    ? '#BAE6FD'
+    : '#E0F2FE';
+  const specularOpacity = isSunny ? 0.56 : isRaining ? 0.25 : 0.42;
+
+  return (
+    <g
+      transform={`translate(${centerScreenX}, ${centerScreenY})`}
+      opacity={unlocked ? 0.98 : 0.38}
+      className="pointer-events-none"
+    >
+      {/* 1. Halo externo de gramado úmido e sombreado ao redor da bacia da lagoa */}
+      <path
+        d="M-49,2.8 C-53,-9.5 -31,-20 -2,-21 C27,-22 51,-11.5 49,1.8 C47,14.5 23,21.5 -4,20.5 C-31,19.5 -46,13.5 -49,2.8 Z"
+        fill="#143D23"
+        opacity="0.36"
+      />
+
+      {/* 2. Margem de terra úmida e cascalho orgânico (transição suave entre grama e água) */}
+      <path
+        d="M-45,2.2 C-49,-8.5 -29,-17.8 -2,-18.8 C25,-19.8 47,-10.2 45,1.2 C43,12.8 21,18.8 -4,17.8 C-29,16.8 -42,11.5 -45,2.2 Z"
+        fill={isRaining ? '#4A2C16' : '#5E3D22'}
+        opacity="0.86"
+      />
+      <path
+        d="M-42,1.8 C-46,-7.8 -27,-16.4 -2,-17.2 C23,-18.0 44,-9.2 42,1.2 C40,11.8 19,17.2 -4,16.2 C-27,15.2 -39,10.2 -42,1.8 Z"
+        fill="#825632"
+        opacity="0.62"
+      />
+
+      {/* 3. Camada de água rasa nas bordas (translúcida, deixando perceber o fundo arenoso/pedregoso) */}
+      <path
+        d="M-40,1.2 C-43,-7.2 -25,-14.8 -2,-15.6 C21.5,-16.4 41,-8.2 39,1.2 C37,10.6 17.5,15.6 -4,14.6 C-25.5,13.6 -37,8.4 -40,1.2 Z"
+        fill={shallowWaterColor}
+        opacity="0.82"
+      />
+
+      {/* Seixos submersos visíveis na água rasa próxima à borda */}
+      <ellipse cx="-26" cy="6.2" rx="3.2" ry="1.5" fill="#0F4C5C" opacity="0.28" />
+      <ellipse cx="24" cy="-5.4" rx="2.8" ry="1.3" fill="#0F4C5C" opacity="0.25" />
+      <ellipse cx="12" cy="9.2" rx="2.5" ry="1.2" fill="#0F4C5C" opacity="0.24" />
+
+      {/* 4. Camada intermediária da lagoa (tom esmeralda/turquesa natural) */}
+      <path
+        d="M-35,1.0 C-38,-6.2 -21,-12.8 -1.5,-13.5 C18.5,-14.2 35,-7.0 33.5,1.0 C32,9.0 15,13.2 -3.5,12.4 C-22,11.6 -32,7.2 -35,1.0 Z"
+        fill="url(#pondWater)"
+        opacity="0.94"
+      />
+      <path
+        d="M-31,0.8 C-33,-5.4 -18,-11.0 -1,-11.6 C16,-12.2 30.5,-6.0 29,0.8 C27.5,7.8 13,11.4 -3,10.8 C-19,10.2 -28,6.2 -31,0.8 Z"
+        fill={midWaterColor}
+        opacity="0.38"
+      />
+
+      {/* 5. Leito central mais profundo (mais escuro e sereno no meio da lagoa) */}
+      <path
+        d="M-23,0.4 C-25,-4.4 -13,-8.6 0,-8.8 C13.5,-9.0 24.5,-4.0 23,0.8 C21.5,5.6 9.5,8.4 -2.8,7.8 C-15,7.4 -21,4.6 -23,0.4 Z"
+        fill={deepWaterColor}
+        opacity="0.52"
+      />
+
+      {/* 6. Sombra interna da margem superior-direita projetada na água rasa (profundidade 3D) */}
+      <path
+        d="M-37,-2.2 C-31,-9.2 -14,-14.4 4,-14.6 C22,-14.8 36,-8.2 37,-0.5 C32,-5.8 19,-10.8 2,-11.2 C-15,-11.6 -29,-7.4 -37,-2.2 Z"
+        fill="#063946"
+        opacity="0.32"
+      />
+
+      {/* 7. Reflexo suave da vegetação próxima e do céu na superfície da água */}
+      <path
+        d="M-28,2.5 C-24,-1.8 -12,-4.5 -1,-3.8 C9,-3.2 16,0.8 13,4.8 C10,8.4 -4,9.8 -16,8.4 C-24,7.2 -30,4.8 -28,2.5 Z"
+        fill="#134E4A"
+        opacity="0.22"
+      />
+      <ellipse
+        cx={6 + wavePhase1 * 1.4}
+        cy={-2.5 + wavePhase2 * 0.45}
+        rx={15 * shimmerScale}
+        ry={4.6 * shimmerScale}
+        transform="rotate(-8 6 -2.5)"
+        fill={skyReflectionColor}
+        opacity={specularOpacity * 0.42}
+      />
+
+      {/* 8. Ondulações orgânicas suaves e reflexos especulares da luz solar/ambiental */}
+      <path
+        d={`M ${-18 + wavePhase1 * 1.6},${-3.8 + wavePhase2 * 0.4} Q ${-5 + wavePhase1 * 1.1},${-7.2 + wavePhase2 * 0.45} ${8 + wavePhase1 * 1.5},${-4.0 + wavePhase2 * 0.4}`}
+        stroke={skyReflectionColor}
+        strokeWidth="1.25"
+        fill="none"
+        strokeLinecap="round"
+        opacity={specularOpacity}
+      />
+      <path
+        d={`M ${-10 - wavePhase2 * 1.5},${3.8 - wavePhase1 * 0.4} Q ${4 - wavePhase2 * 1.1},${1.2 - wavePhase1 * 0.4} ${19 - wavePhase2 * 1.5},${4.2 - wavePhase1 * 0.4}`}
+        stroke="#E0F2FE"
+        strokeWidth="1.1"
+        fill="none"
+        strokeLinecap="round"
+        opacity={specularOpacity * 0.85}
+      />
+      <path
+        d={`M ${-23 + wavePhase2 * 1.1},${5.6} Q ${-12 + wavePhase2 * 0.9},${3.8} ${-2 + wavePhase2 * 1.1},${5.8}`}
+        stroke="#BAE6FD"
+        strokeWidth="0.9"
+        fill="none"
+        strokeLinecap="round"
+        opacity={specularOpacity * 0.68}
+      />
+
+      {/* Pequenos brilhos solares pontuais na água em tempo ensolarado */}
+      {isSunny && (
+        <g opacity={0.45 + Math.sin(timeSec * 2.6) * 0.2}>
+          <ellipse cx={11 + wavePhase1 * 1.1} cy="-4.6" rx="2.0" ry="0.75" fill="#FEF9C3" />
+          <ellipse cx={2 - wavePhase2 * 0.9} cy="-1.0" rx="1.5" ry="0.55" fill="#FFFFFF" />
+          <ellipse cx={16 + wavePhase2 * 0.8} cy="1.2" rx="1.3" ry="0.5" fill="#FEF9C3" />
+        </g>
+      )}
+
+      {/* 9. Anéis concêntricos sutis de gotas de chuva na superfície da lagoa (apenas durante chuva) */}
+      {isRaining && (
+        <g>
+          {[
+            { rx: -15, ry: 1.0, phase: 0.0 },
+            { rx: 9, ry: -2.5, phase: 0.38 },
+            { rx: -3, ry: 5.2, phase: 0.72 },
+          ].map((ring, idx) => {
+            const p = (timeSec * 0.95 + ring.phase) % 1;
+            const radiusX = 1.8 + p * 8.5;
+            const radiusY = 0.8 + p * 3.8;
+            const ringOpacity = (1 - p) * 0.55;
+            return (
+              <ellipse
+                key={idx}
+                cx={ring.rx}
+                cy={ring.ry}
+                rx={radiusX}
+                ry={radiusY}
+                fill="none"
+                stroke="#E0F2FE"
+                strokeWidth="0.95"
+                opacity={ringOpacity}
+              />
+            );
+          })}
+        </g>
+      )}
+
+      {/* 10. Folhas aquáticas flutuantes (vitórias-régias discretas com pequena flor de lótus campestre) */}
+      <g transform={`translate(${-11 + wavePhase1 * 0.45}, ${-1.2 + lilyBob})`}>
+        <ellipse cx="-0.3" cy="0.6" rx="4.9" ry="2.35" fill="#063946" opacity="0.32" />
+        <path
+          d="M 0,0 L 4.2,-1.0 A 4.8,2.3 0 1,0 4.4,0.6 Z"
+          fill="#2E8540"
+        />
+        <path
+          d="M -0.4,-0.15 L 3.2,-0.8 A 3.6,1.7 0 1,0 3.3,0.35 Z"
+          fill="#4E9A53"
+          opacity="0.85"
+        />
+        {/* Flor de ninfeia/lótus delicada */}
+        <circle cx="-0.6" cy="-0.7" r="1.35" fill="#FCE7F3" />
+        <circle cx="0.6" cy="-0.6" r="1.25" fill="#FBCFE8" />
+        <circle cx="0" cy="-1.2" r="1.25" fill="#FFF1F2" />
+        <circle cx="0" cy="-0.7" r="0.55" fill="#FDE047" />
+      </g>
+
+      <g transform={`translate(${10 + wavePhase2 * 0.4}, ${2.2 - lilyBob * 0.8})`}>
+        <ellipse cx="-0.25" cy="0.5" rx="3.8" ry="1.8" fill="#063946" opacity="0.28" />
+        <path
+          d="M 0,0 L -3.4,-0.7 A 3.6,1.7 0 1,1 -3.5,0.6 Z"
+          fill="#3FA34D"
+        />
+      </g>
+
+      {/* 11. Pedras naturais nas margens (algumas parcialmente submersas com linha d'água suave) */}
+      {[
+        { sx: -35, sy: -4.2, rx: 5.4, ry: 2.6, sub: true },
+        { sx: -28, sy: -9.2, rx: 3.8, ry: 1.9, sub: false },
+        { sx: 26, sy: -10.5, rx: 4.8, ry: 2.3, sub: true },
+        { sx: 36, sy: -2.8, rx: 4.2, ry: 2.0, sub: false },
+        { sx: 32, sy: 6.2, rx: 4.8, ry: 2.3, sub: true },
+        { sx: -19, sy: 12.4, rx: 4.2, ry: 2.0, sub: false },
+      ].map((st, idx) => (
+        <g key={idx} transform={`translate(${st.sx}, ${st.sy})`}>
+          {/* Sombra de contato/submersão da pedra */}
+          <ellipse cx="-0.4" cy="0.9" rx={st.rx * 1.08} ry={st.ry * 1.08} fill="#072617" opacity="0.32" />
+          {/* Base da pedra campestre quente */}
+          <ellipse cx="0" cy="0" rx={st.rx} ry={st.ry} fill="#78716C" />
+          {/* Topo iluminado pelo sol do topo-direito */}
+          <ellipse
+            cx={st.rx * 0.14}
+            cy={-st.ry * 0.24}
+            rx={st.rx * 0.62}
+            ry={st.ry * 0.54}
+            fill="#D6D3D1"
+            opacity="0.8"
+          />
+          {/* Reflexo úmido na base das pedras parcialmente submersas */}
+          {st.sub && (
+            <path
+              d={`M ${-st.rx * 0.82},${st.ry * 0.55} Q 0,${st.ry * 1.02} ${st.rx * 0.82},${st.ry * 0.55}`}
+              stroke="#BAE6FD"
+              strokeWidth="0.75"
+              fill="none"
+              strokeLinecap="round"
+              opacity="0.55"
+            />
+          )}
+        </g>
+      ))}
+
+      {/* 12. Pequenos juncos, taboas e tufos de grama úmida nas margens reagindo à brisa */}
+      <g transform={`translate(-31, -6.5) rotate(${reedSwayLeft})`}>
+        <ellipse cx="-0.3" cy="1.0" rx="3.4" ry="1.3" fill="#072617" opacity="0.25" />
+        <path
+          d="M-1.8,0.6 Q-3.0,-4.8 -4.0,-10.2 M0,0.8 Q-0.3,-5.8 -0.6,-12.2 M1.5,0.6 Q2.8,-4.4 3.8,-9.0"
+          stroke="#1E562B"
+          strokeWidth="1.2"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M-0.6,0.6 Q0.6,-4.2 1.4,-8.6"
+          stroke="#469950"
+          strokeWidth="0.95"
+          fill="none"
+          strokeLinecap="round"
+        />
+        {/* Espiga marrom aveludada de taboa (cattail) */}
+        <ellipse
+          cx="-0.5"
+          cy="-9.4"
+          rx="1.05"
+          ry="2.6"
+          transform="rotate(-4 -0.5 -9.4)"
+          fill="#5C2D16"
+        />
+        <ellipse
+          cx="-0.35"
+          cy="-9.6"
+          rx="0.45"
+          ry="1.9"
+          transform="rotate(-4 -0.35 -9.6)"
+          fill="#854D27"
+        />
+      </g>
+
+      <g transform={`translate(33, 4.5) rotate(${reedSwayRight})`}>
+        <ellipse cx="-0.3" cy="0.8" rx="3.0" ry="1.2" fill="#072617" opacity="0.22" />
+        <path
+          d="M-1.4,0.5 Q-2.5,-3.6 -3.4,-7.4 M0,0.6 Q0.3,-4.2 0.6,-8.8 M1.3,0.4 Q2.5,-3.2 3.4,-6.4"
+          stroke="#236332"
+          strokeWidth="1.15"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <circle cx="0.6" cy="-9.0" r="1.25" fill="#FEF08A" />
+        <circle cx="0.6" cy="-9.0" r="0.5" fill="#D97706" />
+      </g>
+
+      {/* Pequenos tufos rasteiros integrando a margem inferior ao gramado */}
+      <path
+        d="M-12,15.8 L-13.2,12.8 M-9.8,16.2 L-9.5,13.2 M10,15.0 L11.2,12.2 M12.4,14.5 L13.8,12.0"
+        stroke="#255E34"
+        strokeWidth="1.0"
+        strokeLinecap="round"
+      />
+    </g>
+  );
+};
+

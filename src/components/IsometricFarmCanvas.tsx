@@ -18,6 +18,7 @@ import {
   IsometricChickenArtwork,
   IsometricCropArtwork,
   IsometricGroundFloraArtwork,
+  IsometricPondArtwork,
   IsometricShrubArtwork,
   IsometricTreeArtwork,
   TreeRenderConfig,
@@ -744,21 +745,22 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
 
     return (
       <g key="entity_barn" transform={`translate(${bx}, ${by})`}>
-        {/* Sombra projetada suave e oclusão de contato */}
-        <ellipse cx="-6" cy="19" rx="74" ry="33" fill="#022C22" opacity="0.38" />
-        <ellipse cx="0" cy="17" rx="58" ry="26" fill="#022C22" opacity="0.32" />
+        {/* Sombra projetada gradual em 3 camadas e oclusão de contato */}
+        <ellipse cx="-8" cy="20" rx="78" ry="34.5" fill="#0B2E1B" opacity="0.22" />
+        <ellipse cx="-4" cy="18.5" rx="66" ry="29.5" fill="#072617" opacity="0.28" />
+        <ellipse cx="0" cy="17" rx="55" ry="24.5" fill="#051B10" opacity="0.32" />
 
-        {/* Fundação de pedra rústica na base do celeiro */}
+        {/* Fundação de pedra rústica aquecida na base do celeiro */}
         <polygon
           points="-53,7 0,33 0,27 -53,1"
-          fill="#64748B"
-          stroke="#334155"
+          fill="#686259"
+          stroke="#3F3B36"
           strokeWidth="1"
         />
         <polygon
           points="0,33 53,7 53,1 0,27"
-          fill="#94A3B8"
-          stroke="#334155"
+          fill="#968F83"
+          stroke="#3F3B36"
           strokeWidth="1"
         />
 
@@ -936,7 +938,22 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             stroke="#7F1D1D"
             strokeWidth="1.2"
           />
+          {/* Tufos de grama abraçando a base de pedra do silo */}
+          <path
+            d="M-13,20 L-15,15.5 M-4,23.5 L-4.5,19 M8,22.5 L10,18"
+            stroke="#255E34"
+            strokeWidth="1.15"
+            strokeLinecap="round"
+          />
         </g>
+
+        {/* Tufos de grama e pedrinhas ancorando a fundação do celeiro ao solo */}
+        <path
+          d="M-38,15.5 L-40,11.5 M-16,26.5 L-17,22.2 M22,23.5 L23.5,19.2 M44,12.5 L46,8.5"
+          stroke="#255E34"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
       </g>
     );
   };
@@ -980,27 +997,38 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         }}
         className="cursor-pointer group"
       >
-        {/* Sombra de contato externa da moldura de madeira */}
+        {/* Sombra de contato externa em duas camadas graduais sob a moldura de madeira */}
         <polygon
           points={getPolygonPoints(
-            plot.gridX + 0.03,
-            plot.gridY + 0.03,
-            0.94,
-            0.94,
-            6.5
+            plot.gridX + 0.01,
+            plot.gridY + 0.02,
+            0.96,
+            0.96,
+            6.8
           )}
-          fill="#022C22"
-          opacity="0.34"
+          fill="#0B2E1B"
+          opacity="0.22"
+        />
+        <polygon
+          points={getPolygonPoints(
+            plot.gridX + 0.04,
+            plot.gridY + 0.04,
+            0.92,
+            0.92,
+            5.8
+          )}
+          fill="#051B10"
+          opacity="0.32"
         />
 
         {/* Faces laterais 3D da borda de contenção de madeira do canteiro */}
         <polygon
           points={`${pLeft.x},${pLeft.y} ${pBottom.x},${pBottom.y} ${pBottom.x},${pBottom.y + 5.5} ${pLeft.x},${pLeft.y + 5.5}`}
-          fill="#3E1D0A"
+          fill="#43200B"
         />
         <polygon
           points={`${pBottom.x},${pBottom.y} ${pRight.x},${pRight.y} ${pRight.x},${pRight.y + 5.5} ${pBottom.x},${pBottom.y + 5.5}`}
-          fill="#5C2D0C"
+          fill="#63310E"
         />
 
         {/* Superfície de terra fértil com borda chanfrada */}
@@ -1014,12 +1042,37 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           fill="url(#soilGradient)"
           stroke={
             growth.isReady
-              ? '#FACC15'
+              ? '#EAB308'
               : isRaining
               ? '#38BDF8'
               : '#7C3F1C'
           }
-          strokeWidth={growth.isReady ? '2.4' : '1.6'}
+          strokeWidth={growth.isReady ? '2.2' : '1.5'}
+        />
+
+        {/* Sombra interna da moldura superior do canteiro para dar profundidade real à caixa de terra */}
+        <polyline
+          points={`${gridToScreen(plot.gridX + 0.08, plot.gridY + 0.92).x},${
+            gridToScreen(plot.gridX + 0.08, plot.gridY + 0.92).y
+          } ${gridToScreen(plot.gridX + 0.08, plot.gridY + 0.08).x},${
+            gridToScreen(plot.gridX + 0.08, plot.gridY + 0.08).y
+          } ${gridToScreen(plot.gridX + 0.92, plot.gridY + 0.08).x},${
+            gridToScreen(plot.gridX + 0.92, plot.gridY + 0.08).y
+          }`}
+          fill="none"
+          stroke="#2A1205"
+          strokeWidth="1.4"
+          opacity="0.45"
+        />
+
+        {/* Pequenos fios de grama nas quinas inferiores integrando o canteiro ao gramado */}
+        <path
+          d={`M${pBottom.x - 6},${pBottom.y + 3.2} L${pBottom.x - 8},${pBottom.y - 0.5} M${
+            pBottom.x + 6
+          },${pBottom.y + 3.0} L${pBottom.x + 8},${pBottom.y - 0.6}`}
+          stroke="#255E34"
+          strokeWidth="1.05"
+          strokeLinecap="round"
         />
 
         {/* Arte botânica específica da cultura */}
@@ -1267,6 +1320,8 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             unlocked={unlockedZoneIds.has(t.zone)}
             timeSec={animTimeSec}
             windStrength={windStrength}
+            isRaining={isRaining}
+            isSunny={isSunny}
           />
         ),
       });
@@ -1321,6 +1376,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     selectedCrop,
     windStrength,
     isRaining,
+    isSunny,
   ]);
 
   return (
@@ -1367,23 +1423,64 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         className="w-full h-full max-w-[1100px] max-h-full relative z-0"
       >
         <defs>
-          {/* Paleta de grama campestre naturalista, aconchegante e harmoniosa */}
-          <linearGradient id="islandGrass" x1="25%" y1="0%" x2="75%" y2="100%">
-            <stop offset="0%" stopColor={isRaining ? '#2D7342' : '#5EA856'} />
-            <stop offset="52%" stopColor={isRaining ? '#225E34' : '#438C43'} />
-            <stop offset="100%" stopColor={isRaining ? '#174726' : '#2E6E33'} />
+          {/* Paleta de grama campestre naturalista com resposta sutil à luz solar, brisa e chuva */}
+          <linearGradient id="islandGrass" x1="78%" y1="6%" x2="22%" y2="96%">
+            <stop
+              offset="0%"
+              stopColor={isRaining ? '#2F7644' : isSunny ? '#6CB65E' : '#61A856'}
+            />
+            <stop
+              offset="48%"
+              stopColor={isRaining ? '#236035' : isSunny ? '#499346' : '#438941'}
+            />
+            <stop
+              offset="100%"
+              stopColor={isRaining ? '#174726' : isSunny ? '#2E6E33' : '#2A652F'}
+            />
           </linearGradient>
-          <linearGradient id="soilGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isRaining ? '#593315' : '#804A20'} />
-            <stop offset="100%" stopColor={isRaining ? '#3B200B' : '#593113'} />
+          {/* Luz solar dourada suave no quadrante nordeste e sombra fresca no sudoeste para dar relevo 3D sutil ao terreno */}
+          <radialGradient id="terrainSunGlow" cx="72%" cy="22%" r="64%">
+            <stop
+              offset="0%"
+              stopColor={isSunny ? '#FEF08A' : isRaining ? '#BAE6FD' : '#FEF9C3'}
+              stopOpacity={isSunny ? '0.2' : isRaining ? '0.05' : '0.13'}
+            />
+            <stop
+              offset="55%"
+              stopColor={isSunny ? '#A3E635' : '#E0F2FE'}
+              stopOpacity={isSunny ? '0.07' : isRaining ? '0.02' : '0.04'}
+            />
+            <stop offset="100%" stopColor="#166534" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="soilGradient" x1="80%" y1="0%" x2="20%" y2="100%">
+            <stop offset="0%" stopColor={isRaining ? '#5C3516' : '#854D22'} />
+            <stop offset="100%" stopColor={isRaining ? '#3B200B' : '#562F12'} />
           </linearGradient>
-          <linearGradient id="pondWater" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#38BDF8" />
-            <stop offset="100%" stopColor="#0284C7" />
-          </linearGradient>
-          <radialGradient id="sunBurst" cx="82%" cy="14%" r="48%">
-            <stop offset="0%" stopColor="#FEF08A" stopOpacity="0.4" />
-            <stop offset="50%" stopColor="#FDE047" stopOpacity="0.12" />
+          <radialGradient id="pondWater" cx="46%" cy="42%" r="64%">
+            <stop
+              offset="0%"
+              stopColor={isRaining ? '#0369A1' : isSunny ? '#0F766E' : '#0284C7'}
+            />
+            <stop
+              offset="58%"
+              stopColor={isRaining ? '#0284C7' : isSunny ? '#14B8A6' : '#0EA5E9'}
+            />
+            <stop
+              offset="100%"
+              stopColor={isRaining ? '#38BDF8' : isSunny ? '#5EEAD4' : '#38BDF8'}
+            />
+          </radialGradient>
+          <radialGradient id="sunBurst" cx="82%" cy="14%" r="52%">
+            <stop
+              offset="0%"
+              stopColor="#FEF08A"
+              stopOpacity={isSunny ? '0.4' : '0.2'}
+            />
+            <stop
+              offset="50%"
+              stopColor="#FDE047"
+              stopOpacity={isSunny ? '0.12' : '0.05'}
+            />
             <stop offset="100%" stopColor="#FDE047" stopOpacity="0" />
           </radialGradient>
         </defs>
@@ -1399,7 +1496,7 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           <polygon
             points={getPolygonPoints(0, 0, 9, 9, 36)}
             fill="#022C22"
-            opacity="0.48"
+            opacity="0.46"
           />
 
           {/* Laterais estratificadas da plataforma (Solo, Subsolo de Argila, Rocha e Borda de Grama) */}
@@ -1427,9 +1524,21 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                   points={`${pBottom.x},${pBottom.y} ${pRight.x},${pRight.y} ${pRight.x},${pRight.y + 16} ${pBottom.x},${pBottom.y + 16}`}
                   fill="#8A4B22"
                 />
-                {/* Pedras incrustadas na lateral do terreno */}
-                <ellipse cx={(pLeft.x + pBottom.x) * 0.52} cy={(pLeft.y + pBottom.y) * 0.52 + 16} rx="8" ry="4" fill="#64748B" opacity="0.7" />
-                <ellipse cx={(pBottom.x + pRight.x) * 0.45} cy={(pBottom.y + pRight.y) * 0.45 + 14} rx="9" ry="4.2" fill="#94A3B8" opacity="0.65" />
+                {/* Pedras quentes incrustadas na lateral do terreno */}
+                <ellipse cx={(pLeft.x + pBottom.x) * 0.52} cy={(pLeft.y + pBottom.y) * 0.52 + 16} rx="8" ry="4" fill="#686259" opacity="0.72" />
+                <ellipse cx={(pBottom.x + pRight.x) * 0.45} cy={(pBottom.y + pRight.y) * 0.45 + 14} rx="9" ry="4.2" fill="#968F83" opacity="0.68" />
+
+                {/* Sombra fina projetada pelo lábio de grama sobre o barranco de terra */}
+                <polygon
+                  points={`${pLeft.x},${pLeft.y + 7} ${pBottom.x},${pBottom.y + 7} ${pBottom.x},${pBottom.y + 10.5} ${pLeft.x},${pLeft.y + 10.5}`}
+                  fill="#2A1205"
+                  opacity="0.45"
+                />
+                <polygon
+                  points={`${pBottom.x},${pBottom.y + 7} ${pRight.x},${pRight.y + 7} ${pRight.x},${pRight.y + 10.5} ${pBottom.x},${pBottom.y + 10.5}`}
+                  fill="#2A1205"
+                  opacity="0.35"
+                />
 
                 {/* Borda espessa de grama viva no topo da falésia */}
                 <polygon
@@ -1448,8 +1557,14 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           <polygon
             points={getPolygonPoints(0, 0, 9, 9)}
             fill="url(#islandGrass)"
-            stroke={isRaining ? '#34D399' : '#86EFAC'}
-            strokeWidth="2"
+            stroke={isRaining ? '#2E7D47' : '#74C365'}
+            strokeWidth="1.6"
+          />
+
+          {/* Banho sutil de luz solar direcional sobre o relevo do gramado */}
+          <polygon
+            points={getPolygonPoints(0, 0, 9, 9)}
+            fill="url(#terrainSunGlow)"
           />
 
           {/* Manchas sutis de variação orgânica no gramado */}
@@ -1505,40 +1620,60 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             })
           )}
 
-          {/* ================= CAMINHOS DE TERRA COM BORDAS SUAVES E SEIXOS ================= */}
+          {/* ================= CAMINHOS DE TERRA COM BORDAS ORGÂNICAS SUAVES E SEIXOS ================= */}
           {[
             { gx: 1, gy: 2, w: 1, h: 3 },
             { gx: 1, gy: 4, w: 3, h: 1 },
             { gx: 4, gy: 2, w: 1, h: 3 },
           ].map((path, idx) => (
             <g key={`path_core_${idx}`}>
+              {/* Transição externa escura entre grama e terra batida */}
               <polygon
                 points={getPolygonPoints(
-                  path.gx + 0.08,
-                  path.gy + 0.08,
-                  path.w - 0.16,
-                  path.h - 0.16
+                  path.gx + 0.06,
+                  path.gy + 0.06,
+                  path.w - 0.12,
+                  path.h - 0.12
                 )}
-                fill="#78350F"
-                fillOpacity="0.32"
+                fill="#2D5A27"
+                fillOpacity="0.28"
               />
               <polygon
                 points={getPolygonPoints(
-                  path.gx + 0.13,
-                  path.gy + 0.13,
-                  path.w - 0.26,
-                  path.h - 0.26
+                  path.gx + 0.1,
+                  path.gy + 0.1,
+                  path.w - 0.2,
+                  path.h - 0.2
                 )}
-                fill={isRaining ? '#854D0E' : '#C27832'}
-                fillOpacity="0.68"
-                stroke="#92400E"
-                strokeWidth="1"
-                strokeOpacity="0.4"
+                fill="#78350F"
+                fillOpacity="0.34"
+              />
+              {/* Leito principal de terra batida sem contorno rígido */}
+              <polygon
+                points={getPolygonPoints(
+                  path.gx + 0.14,
+                  path.gy + 0.14,
+                  path.w - 0.28,
+                  path.h - 0.28
+                )}
+                fill={isRaining ? '#854D0E' : '#B87333'}
+                fillOpacity="0.66"
+              />
+              {/* Centro levemente mais claro onde há pisoteio */}
+              <polygon
+                points={getPolygonPoints(
+                  path.gx + 0.22,
+                  path.gy + 0.22,
+                  path.w - 0.44,
+                  path.h - 0.44
+                )}
+                fill={isRaining ? '#A16207' : '#D49452'}
+                fillOpacity="0.32"
               />
             </g>
           ))}
 
-          {/* Pedrinhas decorativas ao longo dos caminhos */}
+          {/* Pedrinhas decorativas embutidas nos caminhos */}
           {[
             { gx: 1.3, gy: 2.6 },
             { gx: 1.7, gy: 3.8 },
@@ -1548,24 +1683,26 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
           ].map((st, idx) => {
             const pt = gridToScreen(st.gx, st.gy);
             return (
-              <ellipse
-                key={`pebble_${idx}`}
-                cx={pt.x}
-                cy={pt.y}
-                rx="2.6"
-                ry="1.4"
-                fill="#92400E"
-                opacity="0.48"
-              />
+              <g key={`pebble_${idx}`}>
+                <ellipse cx={pt.x - 0.3} cy={pt.y + 0.3} rx="2.7" ry="1.45" fill="#451A03" opacity="0.28" />
+                <ellipse cx={pt.x} cy={pt.y} rx="2.4" ry="1.25" fill="#8C5828" opacity="0.52" />
+              </g>
             );
           })}
 
           {unlockedZoneIds.has('zone_east') && (
-            <polygon
-              points={getPolygonPoints(4.1, 2.2, 1.8, 0.8)}
-              fill={isRaining ? '#854D0E' : '#C27832'}
-              fillOpacity="0.68"
-            />
+            <g>
+              <polygon
+                points={getPolygonPoints(4.08, 2.18, 1.84, 0.84)}
+                fill="#78350F"
+                fillOpacity="0.28"
+              />
+              <polygon
+                points={getPolygonPoints(4.14, 2.24, 1.72, 0.72)}
+                fill={isRaining ? '#854D0E' : '#B87333'}
+                fillOpacity="0.64"
+              />
+            </g>
           )}
 
           {/* Agrupamentos irregulares de flores silvestres, trevos, tufos de grama, pedrinhas e folhas caídas */}
@@ -1584,64 +1721,24 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             );
           })}
 
-          {/* Lagoa campestre orgânica na Zona Sul com margem suave de terra, pedras naturais, juncos e vitória-régia */}
+          {/* Lagoa campestre orgânica na Zona Sul com profundidade, margens naturais, plantas aquáticas e ondulações */}
           {(() => {
             const pPond = gridToScreen(2.25, 8.32);
             return (
-              <g
-                transform={`translate(${pPond.x}, ${pPond.y})`}
-                opacity={unlockedZoneIds.has('zone_south') ? 1 : 0.35}
-              >
-                {/* Margem úmida de terra e cascalho */}
-                <path
-                  d="M-44,2 C-48,-8 -28,-17 -2,-18 C24,-19 46,-10 44,1 C42,12 20,18 -4,17 C-28,16 -41,11 -44,2 Z"
-                  fill="#5C4028"
-                  opacity="0.68"
-                />
-                {/* Espelho d'água curvo com profundidade */}
-                <path
-                  d="M-39,1 C-42,-7 -24,-14 -2,-15 C21,-16 40,-8 38,1 C36,10 17,15 -4,14 C-25,13 -36,8 -39,1 Z"
-                  fill="url(#pondWater)"
-                  stroke="#7DD3FC"
-                  strokeWidth="1.2"
-                />
-                {/* Subtom mais escuro de profundidade no centro da lagoa */}
-                <path
-                  d="M-24,0 C-26,-5 -14,-9 0,-9 C15,-9 26,-4 24,1 C22,6 10,9 -3,8 C-16,8 -22,5 -24,0 Z"
-                  fill="#0369A1"
-                  opacity="0.38"
-                />
-                {/* Reflexos suaves de luz solar na água */}
-                <path
-                  d="M-16,-5 Q-6,-7 4,-5 M6,3 Q14,2 21,4"
-                  stroke="#E0F2FE"
-                  strokeWidth="1.1"
-                  fill="none"
-                  strokeLinecap="round"
-                  opacity="0.65"
-                />
-                {/* Pedras arredondadas e tufos de junco na borda */}
-                <ellipse cx="-35" cy="-4" rx="5.2" ry="2.6" fill="#64748B" />
-                <ellipse cx="-36" cy="-4.8" rx="3.2" ry="1.4" fill="#CBD5E1" opacity="0.75" />
-                <ellipse cx="-28" cy="-9" rx="3.6" ry="1.8" fill="#475569" />
-                <ellipse cx="33" cy="6" rx="4.6" ry="2.2" fill="#64748B" />
-                <ellipse cx="32" cy="5.3" rx="2.8" ry="1.1" fill="#CBD5E1" opacity="0.7" />
-                <path
-                  d="M-31,-6 L-33,-14 M-29,-5 L-28,-13 M31,4 L33,-3"
-                  stroke="#1E562B"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-                {/* Vitórias-régias e flor de lótus campestre */}
-                <ellipse cx="-9" cy="-1" rx="4.8" ry="2.3" fill="#2E8540" opacity="0.9" />
-                <circle cx="-8.2" cy="-1.7" r="1.35" fill="#FBCFE8" />
-                <circle cx="-8.2" cy="-1.7" r="0.5" fill="#FDE047" />
-                <ellipse cx="10" cy="2" rx="3.6" ry="1.7" fill="#3FA34D" opacity="0.88" />
-              </g>
+              <IsometricPondArtwork
+                centerScreenX={pPond.x}
+                centerScreenY={pPond.y}
+                unlocked={unlockedZoneIds.has('zone_south')}
+                timeSec={animTimeSec}
+                windStrength={windStrength}
+                isRaining={isRaining}
+                isSunny={isSunny}
+                isBreezy={isBreezy}
+              />
             );
           })()}
 
-          {/* ================= CERCAS DE MADEIRA 3D COM ESPESSURA E SOMBRAS ================= */}
+          {/* ================= CERCAS DE MADEIRA 3D COM ESPESSURA, SOMBRAS E BASE DE GRAMA ================= */}
           {(() => {
             const fencePosts = [
               { gx: 0.2, gy: 0.2 },
@@ -1654,24 +1751,26 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             ];
             return (
               <g>
-                {/* Sombra projetada da cerca */}
+                {/* Sombra projetada da cerca para a esquerda-baixo */}
                 <line
-                  x1={gridToScreen(0.2, 0.2).x}
+                  x1={gridToScreen(0.2, 0.2).x - 1.5}
                   y1={gridToScreen(0.2, 0.2).y + 2.5}
-                  x2={gridToScreen(4.8, 0.2).x}
+                  x2={gridToScreen(4.8, 0.2).x - 1.5}
                   y2={gridToScreen(4.8, 0.2).y + 2.5}
-                  stroke="#022C22"
-                  strokeWidth="4"
-                  opacity="0.3"
+                  stroke="#072617"
+                  strokeWidth="4.2"
+                  strokeLinecap="round"
+                  opacity="0.26"
                 />
                 <line
-                  x1={gridToScreen(0.2, 0.2).x}
+                  x1={gridToScreen(0.2, 0.2).x - 1.5}
                   y1={gridToScreen(0.2, 0.2).y + 2.5}
-                  x2={gridToScreen(0.2, 4.8).x}
+                  x2={gridToScreen(0.2, 4.8).x - 1.5}
                   y2={gridToScreen(0.2, 4.8).y + 2.5}
-                  stroke="#022C22"
-                  strokeWidth="4"
-                  opacity="0.3"
+                  stroke="#072617"
+                  strokeWidth="4.2"
+                  strokeLinecap="round"
+                  opacity="0.26"
                 />
 
                 {/* Trilhos de madeira com face superior iluminada e inferior sombreada */}
@@ -1729,7 +1828,8 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                   const pt = gridToScreen(fp.gx, fp.gy);
                   return (
                     <g key={i}>
-                      <ellipse cx={pt.x} cy={pt.y + 1.5} rx="4.2" ry="2.0" fill="#022C22" opacity="0.38" />
+                      <ellipse cx={pt.x - 0.6} cy={pt.y + 1.6} rx="4.6" ry="2.1" fill="#072617" opacity="0.34" />
+                      <ellipse cx={pt.x} cy={pt.y + 1.2} rx="3.4" ry="1.4" fill="#4A2C14" opacity="0.65" />
                       <rect
                         x={pt.x - 2.8}
                         y={pt.y - 15}
@@ -1750,6 +1850,15 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
                       />
                       {/* Topo chanfrado claro do mourão */}
                       <ellipse cx={pt.x} cy={pt.y - 14.5} rx="2.6" ry="1.2" fill="#FDE68A" />
+                      {/* Fios de grama na base do mourão */}
+                      <path
+                        d={`M${pt.x - 2.2},${pt.y + 1.5} L${pt.x - 3.4},${pt.y - 1.2} M${
+                          pt.x + 2.0
+                        },${pt.y + 1.5} L${pt.x + 3.2},${pt.y - 1.0}`}
+                        stroke="#255E34"
+                        strokeWidth="0.95"
+                        strokeLinecap="round"
+                      />
                     </g>
                   );
                 })}
@@ -1893,24 +2002,37 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
         </g>
 
         {/* ================= EFEITOS ATMOSFÉRICOS DE TELA CHEIA NO SVG ================= */}
-        {isSunny && (
+        {(isSunny || isBreezy) && (
           <g className="pointer-events-none">
             <rect x="0" y="0" width="1000" height="720" fill="url(#sunBurst)" />
-            <polygon
-              points="640,0 790,0 490,720 340,720"
-              fill="#FEF08A"
-              opacity="0.08"
-            />
-            <polygon
-              points="820,0 960,0 680,720 550,720"
-              fill="#FEF08A"
-              opacity="0.06"
-            />
+            {isSunny && (
+              <>
+                <polygon
+                  points="640,0 790,0 490,720 340,720"
+                  fill="#FEF08A"
+                  opacity="0.065"
+                />
+                <polygon
+                  points="820,0 960,0 680,720 550,720"
+                  fill="#FEF08A"
+                  opacity="0.05"
+                />
+              </>
+            )}
           </g>
         )}
 
         {isRaining && (
           <g className="pointer-events-none">
+            {/* Véu atmosférico azul-acinzentado suave unificando a iluminação de chuva sem escurecer demais */}
+            <rect
+              x="0"
+              y="0"
+              width="1000"
+              height="720"
+              fill="#0F172A"
+              opacity="0.08"
+            />
             {rainDrops.map((drop) => (
               <line
                 key={drop.id}
