@@ -1,0 +1,6 @@
+{
+  "name": "Fazenda da Galera",
+  "description": "Simulador de fazenda isométrica 2D colorido e interativo, otimizado para transmissões ao vivo no TikTok LIVE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

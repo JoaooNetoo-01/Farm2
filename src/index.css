@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-display: 'Outfit', system-ui, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-18px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-34px) scale(0.95);
+  }
+}
+
+@keyframes swayGentle {
+  0%, 100% {
+    transform: rotate(-1.5deg);
+  }
+  50% {
+    transform: rotate(1.5deg);
+  }
+}
+
+@keyframes bounceReady {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-float-up {
+  animation: floatUp 1.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-sway {
+  animation: swayGentle 3.6s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+
+.animate-bounce-ready {
+  animation: bounceReady 1.8s ease-in-out infinite;
+}
+
+@keyframes rainFall {
+  0% {
+    transform: translate3d(12px, -90px, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.75;
+  }
+  85% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(-44px, 760px, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes rainSplash {
+  0%, 100% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.65;
+  }
+}
+
+@keyframes sunPulse {
+  0%, 100% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.52;
+    transform: scale(1.06);
+  }
+}
+
+.animate-rain-drop {
+  animation: rainFall 1.15s linear infinite;
+}
+
+.animate-rain-splash {
+  animation: rainSplash 1.4s ease-out infinite;
+  transform-origin: center;
+}
+
+.animate-sun-pulse {
+  animation: sunPulse 5s ease-in-out infinite;
+}
