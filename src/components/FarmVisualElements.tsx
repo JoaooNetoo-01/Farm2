@@ -882,42 +882,66 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
   const isWalking = chicken.state === 'walking';
   const isPecking = chicken.state === 'pecking';
   const isLooking = chicken.state === 'looking';
+  const isIdle = chicken.state === 'idle';
 
   const stridePhase = chicken.walkDistance * 21;
 
+  // Movimento natural de ciscar o chão com a patinha durante a fase de ciscar ('pecking')
+  const scratchWave = isPecking ? Math.sin(timeSec * 15 + chicken.seedOffset) : 0;
+  const isScratchingFoot = isPecking && scratchWave > 0.25;
+
   const leftLegAngle = isWalking ? Math.sin(stridePhase) * 28 : 0;
-  const rightLegAngle = isWalking ? -Math.sin(stridePhase) * 28 : 0;
+  const rightLegAngle = isWalking
+    ? -Math.sin(stridePhase) * 28
+    : isScratchingFoot
+    ? -22 + scratchWave * 36
+    : 0;
   const leftFootLift = isWalking ? Math.max(0, -Math.cos(stridePhase)) * 2.4 : 0;
-  const rightFootLift = isWalking ? Math.max(0, Math.cos(stridePhase)) * 2.4 : 0;
+  const rightFootLift = isWalking
+    ? Math.max(0, Math.cos(stridePhase)) * 2.4
+    : isScratchingFoot
+    ? 1.4
+    : 0;
 
   let peckProgress = 0;
   if (isPecking && chicken.stateDuration > 0) {
     const norm = 1 - chicken.stateTimer / chicken.stateDuration;
-    peckProgress = Math.pow(Math.max(0, Math.sin(norm * Math.PI * 2)), 1.6);
+    // Duas bicadas rápidas seguidas de uma pausa curta de observação
+    const multiPeckWave = Math.sin(norm * Math.PI * 3);
+    peckProgress = Math.pow(Math.max(0, multiPeckWave), 1.5);
   }
+
+  // Pequeno agito discreto e ocasional das asas quando parada ou olhando ao redor
+  const wingFlutter =
+    (isIdle || isLooking) && Math.sin(timeSec * 2.4 + chicken.seedOffset * 1.7) > 0.78
+      ? Math.sin(timeSec * 24 + chicken.seedOffset) * 9.5
+      : 0;
 
   const bodyBounceY = isWalking
     ? -Math.abs(Math.sin(stridePhase)) * 1.6
     : Math.sin(timeSec * 3.2 + chicken.seedOffset) * 0.4;
 
   const bodyPitchDeg = isPecking
-    ? peckProgress * 26
+    ? 8 + peckProgress * 22
     : isWalking
     ? Math.sin(stridePhase * 2) * 3.5
+    : isLooking
+    ? -2.5
     : 0;
 
+  // Na pausa ('idle') e em 'looking', abaixa e levanta a cabeça suavemente de forma natural
   const headBobDeg = isPecking
-    ? peckProgress * 34
+    ? 10 + peckProgress * 30
     : isWalking
     ? Math.cos(stridePhase) * 8
     : isLooking
-    ? Math.sin(timeSec * 5 + chicken.seedOffset) * 10
-    : Math.sin(timeSec * 2.2 + chicken.seedOffset) * 2.5;
+    ? Math.sin(timeSec * 4.6 + chicken.seedOffset) * 11
+    : Math.sin(timeSec * 2.4 + chicken.seedOffset) * 5.5;
 
   const tailWagDeg = isWalking
     ? Math.sin(stridePhase * 2) * 7
     : isPecking
-    ? -peckProgress * 12
+    ? -peckProgress * 12 + scratchWave * 3.5
     : Math.sin(timeSec * 2.8 + chicken.seedOffset) * 3;
 
   const isWhite = chicken.featherColor === 'white';
@@ -930,9 +954,9 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
 
   return (
     <g transform={`translate(${screenX}, ${screenY})`}>
-      {/* Sombra de contato gradual sob a galinha */}
-      <ellipse cx="0" cy="4.2" rx="11.0" ry="4.8" fill="#072617" opacity="0.3" />
-      <ellipse cx="0" cy="4.0" rx="7.0" ry="3.0" fill="#072617" opacity="0.26" />
+      {/* Sombra de contato gradual sob a galinha (consistente com luz do topo-direita) */}
+      <ellipse cx="-0.8" cy="4.2" rx="11.0" ry="4.8" fill="#072617" opacity="0.29" />
+      <ellipse cx="-0.3" cy="4.0" rx="7.0" ry="3.0" fill="#072617" opacity="0.25" />
 
       <g transform={`scale(${flip}, 1)`}>
         {/* Perna Traseira */}
@@ -956,7 +980,7 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
           />
         </g>
 
-        {/* Perna Frontal */}
+        {/* Perna Frontal (com animação de ciscar a terra) */}
         <g
           transform={`translate(2.2, -1.2) rotate(${rightLegAngle}) translate(0, ${-rightFootLift})`}
         >
@@ -1014,8 +1038,12 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
             opacity="0.82"
           />
 
-          {/* Asa lateral esculpida */}
-          <g transform={`translate(-1, 0.3) rotate(${isWalking ? Math.sin(stridePhase) * 4.5 : 0})`}>
+          {/* Asa lateral esculpida com movimento discreto na caminhada ou ao sacudir as penas */}
+          <g
+            transform={`translate(-1, 0.3) rotate(${
+              isWalking ? Math.sin(stridePhase) * 4.5 : wingFlutter
+            })`}
+          >
             <ellipse
               cx="0"
               cy="0"
@@ -1063,11 +1091,15 @@ export const IsometricChickenArtwork: React.FC<ChickenVisualProps> = ({
           </g>
         </g>
 
-        {isPecking && peckProgress > 0.72 && (
-          <g transform="translate(13.5, 3.2)">
-            <circle cx="0" cy="-1.5" r="1.15" fill="#78350F" opacity="0.85" />
-            <circle cx="2.5" cy="-2.8" r="0.95" fill="#B45309" opacity="0.8" />
-            <circle cx="-1.8" cy="-2.5" r="0.85" fill="#FACC15" opacity="0.9" />
+        {/* Grãozinhos e terra levantada ao bicar ou ciscar o chão */}
+        {isPecking && (peckProgress > 0.65 || isScratchingFoot) && (
+          <g transform="translate(12.2, 3.4)">
+            <circle cx="0" cy="-1.4" r="1.1" fill="#78350F" opacity="0.82" />
+            <circle cx="2.4" cy="-2.6" r="0.9" fill="#B45309" opacity="0.78" />
+            <circle cx="-1.8" cy="-2.3" r="0.85" fill="#FACC15" opacity="0.88" />
+            {isScratchingFoot && (
+              <circle cx="-10.5" cy="-0.4" r="0.95" fill="#78350F" opacity="0.7" />
+            )}
           </g>
         )}
       </g>
@@ -2053,6 +2085,458 @@ export const IsometricShrubArtwork: React.FC<ShrubVisualProps> = ({
         strokeWidth="1.05"
         strokeLinecap="round"
       />
+    </g>
+  );
+};
+
+// ============================================================================
+// VIDA AMBIENTAL 1: VEGETAÇÃO RASTEIRA, TREVOS E FLORES SILVESTRES EM AGRUPAMENTOS
+// ============================================================================
+export interface GroundFloraConfig {
+  id: string;
+  gx: number;
+  gy: number;
+  kind: 'daisy_cluster' | 'clover_patch' | 'wild_blossom' | 'meadow_tuft';
+  colorPrimary?: string;
+  colorSecondary?: string;
+  fallenLeaf?: string | null;
+  stone?: boolean;
+  scale: number;
+  seed: number;
+  zone: string;
+}
+
+interface GroundFloraArtworkProps {
+  flora: GroundFloraConfig;
+  screenX: number;
+  screenY: number;
+  unlocked: boolean;
+  timeSec: number;
+  windStrength: number;
+}
+
+/**
+ * Renderizador de Flores Silvestres, Trevos e Tufos de Grama Rasteira
+ * - Agrupamentos irregulares determinísticos (margaridas, trevos de 3 folhas, flores campestres e tufos).
+ * - Balanço sutil ao vento compartilhando o mesmo ciclo de animação da fazenda.
+ */
+export const IsometricGroundFloraArtwork: React.FC<GroundFloraArtworkProps> = ({
+  flora,
+  screenX,
+  screenY,
+  unlocked,
+  timeSec,
+  windStrength,
+}) => {
+  const { kind, colorPrimary = '#FEF08A', colorSecondary = '#FDE047', fallenLeaf, stone, scale, seed } =
+    flora;
+
+  const sway = computeBreezeAngle(timeSec, seed, windStrength, 1.65);
+  const tilt = (seededUnit(seed, 3) - 0.5) * 8;
+
+  return (
+    <g
+      transform={`translate(${screenX}, ${screenY}) scale(${scale})`}
+      opacity={unlocked ? 1 : 0.38}
+      className="pointer-events-none"
+    >
+      {/* Sombra de contato suave projetada para a esquerda-baixo */}
+      <ellipse cx="-0.6" cy="0.9" rx="4.4" ry="1.8" fill="#072617" opacity="0.22" />
+
+      {/* Pedrinha campestre opcional */}
+      {stone && (
+        <g transform="translate(4.4, 1.2)">
+          <ellipse cx="0" cy="0" rx="2.1" ry="1.05" fill="#64748B" opacity="0.84" />
+          <ellipse cx="-0.25" cy="-0.3" rx="1.2" ry="0.55" fill="#CBD5E1" opacity="0.72" />
+        </g>
+      )}
+
+      {/* Folha caída opcional */}
+      {fallenLeaf && (
+        <ellipse
+          cx="-4.6"
+          cy="1.4"
+          rx="1.8"
+          ry="0.85"
+          transform="rotate(-18 -4.6 1.4)"
+          fill={fallenLeaf}
+          opacity="0.78"
+        />
+      )}
+
+      {/* ESPÉCIE A: Manchinha de Trevos Campestres (Clover Patch) */}
+      {kind === 'clover_patch' && (
+        <g transform={`rotate(${tilt * 0.4 + sway * 0.55})`}>
+          {[
+            { cx: -2.6, cy: -0.6, s: 0.92, col: '#256B37', light: '#489E58' },
+            { cx: 1.8, cy: -1.1, s: 1.0, col: '#2E7D42', light: '#62B66F' },
+            { cx: -0.2, cy: 0.8, s: 0.85, col: '#1E562B', light: '#3C894B' },
+          ].map((cl, i) => (
+            <g key={i} transform={`translate(${cl.cx}, ${cl.cy}) scale(${cl.s})`}>
+              <ellipse cx="-1.1" cy="-0.6" rx="1.25" ry="0.85" transform="rotate(-25 -1.1 -0.6)" fill={cl.col} />
+              <ellipse cx="1.1" cy="-0.6" rx="1.25" ry="0.85" transform="rotate(25 1.1 -0.6)" fill={cl.light} />
+              <ellipse cx="0" cy="0.65" rx="1.15" ry="0.8" fill={cl.col} />
+              <circle cx="0" cy="-0.15" r="0.35" fill="#A7F3D0" opacity="0.65" />
+            </g>
+          ))}
+          {colorPrimary && (
+            <g transform="translate(0.4, -2.4)">
+              <circle cx="-0.7" cy="0" r="0.9" fill={colorPrimary} />
+              <circle cx="0.7" cy="0" r="0.9" fill={colorPrimary} />
+              <circle cx="0" cy="-0.7" r="0.9" fill={colorPrimary} />
+              <circle cx="0" cy="0.7" r="0.9" fill={colorPrimary} />
+              <circle cx="0" cy="0" r="0.6" fill="#F59E0B" />
+            </g>
+          )}
+        </g>
+      )}
+
+      {/* ESPÉCIE B: Agrupamento Irregular de Margaridas / Flores do Campo (Daisy Cluster) */}
+      {kind === 'daisy_cluster' && (
+        <g transform={`rotate(${tilt + sway})`}>
+          <path
+            d="M-0.8,0.4 Q-2.6,-2.8 -3.8,-5.4 M0,0.5 L0.2,-6.8 M0.8,0.4 Q2.6,-2.5 3.6,-4.8"
+            stroke="#1E562B"
+            strokeWidth="1.2"
+            fill="none"
+            strokeLinecap="round"
+          />
+          {/* Flor principal mais alta */}
+          <g transform="translate(0.2, -7.1)">
+            <circle cx="-1.1" cy="0" r="1.1" fill={colorPrimary} />
+            <circle cx="1.1" cy="0" r="1.1" fill={colorPrimary} />
+            <circle cx="0" cy="-1.0" r="1.1" fill={colorPrimary} />
+            <circle cx="0" cy="1.0" r="1.1" fill={colorPrimary} />
+            <circle cx="0" cy="0" r="0.85" fill="#D97706" />
+          </g>
+          {/* Flor secundária menor à esquerda */}
+          <g transform="translate(-3.8, -5.5) scale(0.82)">
+            <circle cx="-1.0" cy="0" r="1.0" fill={colorSecondary} />
+            <circle cx="1.0" cy="0" r="1.0" fill={colorSecondary} />
+            <circle cx="0" cy="-0.9" r="1.0" fill={colorSecondary} />
+            <circle cx="0" cy="0.9" r="1.0" fill={colorSecondary} />
+            <circle cx="0" cy="0" r="0.75" fill="#B45309" />
+          </g>
+        </g>
+      )}
+
+      {/* ESPÉCIE C: Flor Silvestre Lavanda/Azul em Espiga (Wild Blossom) */}
+      {kind === 'wild_blossom' && (
+        <g transform={`rotate(${tilt + sway * 1.05})`}>
+          <path
+            d="M-0.5,0.4 Q-2.1,-2.6 -3.1,-5.0 M0.2,0.5 Q0.8,-3.5 1.1,-7.2 M0.7,0.4 Q2.5,-2.2 3.8,-4.2"
+            stroke="#236332"
+            strokeWidth="1.15"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <ellipse cx="1.0" cy="-7.2" rx="1.2" ry="1.6" fill={colorPrimary} />
+          <ellipse cx="0.8" cy="-5.2" rx="1.35" ry="1.4" fill={colorSecondary} />
+          <circle cx="1.1" cy="-7.5" r="0.55" fill="#FEF9C3" />
+          <circle cx="-3.1" cy="-5.2" r="1.25" fill={colorPrimary} />
+          <circle cx="-3.1" cy="-5.2" r="0.5" fill="#F59E0B" />
+        </g>
+      )}
+
+      {/* ESPÉCIE D: Tufo Orgânico de Grama Campestre (Meadow Tuft) */}
+      {kind === 'meadow_tuft' && (
+        <g transform={`rotate(${tilt + sway * 0.9})`}>
+          <path
+            d="M-1.2,0.4 Q-2.8,-2.4 -4.2,-4.8 M-0.2,0.5 Q-0.6,-3.2 -0.9,-6.2 M0.6,0.5 Q1.8,-2.8 2.8,-5.6 M1.4,0.3 Q3.2,-1.6 4.5,-3.4"
+            stroke="#1E562B"
+            strokeWidth="1.2"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d="M-0.1,0.4 Q0.4,-2.8 0.8,-5.6 M1.0,0.4 Q2.4,-2.0 3.4,-4.2"
+            stroke="#469950"
+            strokeWidth="0.9"
+            fill="none"
+            strokeLinecap="round"
+          />
+        </g>
+      )}
+    </g>
+  );
+};
+
+// ============================================================================
+// VIDA AMBIENTAL 2: BORBOLETAS ESTILIZADAS COM ASAS DUPLAS E VOO CURVO NATURAL
+// ============================================================================
+export interface ButterflyFlightConfig {
+  id: string;
+  baseGx: number;
+  baseGy: number;
+  radiusX: number;
+  radiusY: number;
+  speed: number;
+  phase: number;
+  wingPrimary: string;
+  wingSecondary: string;
+  wingEdge: string;
+  scale: number;
+  zone: string;
+}
+
+interface IsometricButterflyArtworkProps {
+  screenX: number;
+  screenY: number;
+  headingDeg: number;
+  flapPhase: number;
+  flutterY: number;
+  wingPrimary: string;
+  wingSecondary: string;
+  wingEdge: string;
+  scale: number;
+}
+
+/**
+ * Renderizador de Borboleta Campestre Estilizada
+ * - Asas anteriores e posteriores distintas (nunca parece um ponto sem forma).
+ * - Batimento suave com variação entre planeio e batida delicada.
+ */
+export const IsometricButterflyArtwork: React.FC<IsometricButterflyArtworkProps> = ({
+  screenX,
+  screenY,
+  headingDeg,
+  flapPhase,
+  flutterY,
+  wingPrimary,
+  wingSecondary,
+  wingEdge,
+  scale,
+}) => {
+  // Combina batimento suave com breves momentos de planeio aberto
+  const glideMod = 0.75 + 0.25 * Math.sin(flapPhase * 0.22);
+  const wingOpen = 0.28 + Math.abs(Math.sin(flapPhase)) * 0.72 * glideMod;
+
+  return (
+    <g
+      transform={`translate(${screenX}, ${screenY}) scale(${scale})`}
+      className="pointer-events-none"
+    >
+      {/* Sombra discreta no gramado para ancorar a altura de voo na perspectiva isométrica */}
+      <ellipse cx="-1.0" cy="3.8" rx="3.2" ry="1.35" fill="#072617" opacity="0.2" />
+
+      {/* Corpo e asas suspensos suavemente acima das flores */}
+      <g transform={`translate(0, ${-21 + flutterY}) rotate(${headingDeg * 0.22})`}>
+        <g transform={`scale(1, ${wingOpen})`}>
+          {/* Asas Posteriores (Menores e arredondadas) */}
+          <path
+            d="M-0.4,0.2 C-3.2,0.8 -5.4,2.8 -4.2,4.4 C-2.8,5.4 -0.8,3.6 -0.2,1.2 Z"
+            fill={wingSecondary}
+            stroke={wingEdge}
+            strokeWidth="0.45"
+          />
+          <path
+            d="M0.4,0.2 C3.2,0.8 5.4,2.8 4.2,4.4 C2.8,5.4 0.8,3.6 0.2,1.2 Z"
+            fill={wingSecondary}
+            stroke={wingEdge}
+            strokeWidth="0.45"
+          />
+
+          {/* Asas Anteriores (Maiores e recortadas com detalhe interno claro) */}
+          <path
+            d="M-0.3,-0.6 C-3.6,-4.4 -7.4,-3.8 -6.6,-0.4 C-6.0,1.8 -2.8,1.6 -0.3,0.4 Z"
+            fill={wingPrimary}
+            stroke={wingEdge}
+            strokeWidth="0.5"
+          />
+          <path
+            d="M0.3,-0.6 C3.6,-4.4 7.4,-3.8 6.6,-0.4 C6.0,1.8 2.8,1.6 0.3,0.4 Z"
+            fill={wingPrimary}
+            stroke={wingEdge}
+            strokeWidth="0.5"
+          />
+
+          {/* Pinta luminosa delicada nas asas anteriores */}
+          <circle cx="-3.8" cy="-1.4" r="0.85" fill="#FFFBEB" opacity="0.85" />
+          <circle cx="3.8" cy="-1.4" r="0.85" fill="#FFFBEB" opacity="0.85" />
+        </g>
+
+        {/* Tórax/Abdômen e antenas finas */}
+        <ellipse cx="0" cy="0.4" rx="0.7" ry="2.4" fill="#1E293B" />
+        <path
+          d="M-0.2,-1.6 Q-1.2,-3.2 -2.0,-3.4 M0.2,-1.6 Q1.2,-3.2 2.0,-3.4"
+          stroke="#1E293B"
+          strokeWidth="0.4"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </g>
+    </g>
+  );
+};
+
+// ============================================================================
+// VIDA AMBIENTAL 3: PASSARINHOS CAMPESTRES (POUSADOS EM GALHOS E VOO OCASIONAL)
+// ============================================================================
+export interface AmbientBirdConfig {
+  id: string;
+  perchGx: number;
+  perchGy: number;
+  perchHeightY: number; // Offset vertical do galho/apoio em relação à base (screenY)
+  flightArcDx: number;  // Deslocamento lateral suave no arco de voo curto
+  flightArcDy: number;  // Elevação adicional no ápice do voo
+  cycleDurationSec: number;
+  phaseOffsetSec: number;
+  plumagePrimary: string;
+  plumageBreast: string;
+  plumageWing: string;
+  facingLeft: boolean;
+  zone: string;
+  scale: number;
+}
+
+interface IsometricBirdArtworkProps {
+  bird: AmbientBirdConfig;
+  baseScreenX: number;
+  baseScreenY: number;
+  unlocked: boolean;
+  timeSec: number;
+  isRaining: boolean;
+}
+
+/**
+ * Renderizador de Passarinho Campestre Isométrico
+ * - Permanece pousado no galho na maior parte do tempo com movimentos sutis de cabeça, cauda e asas.
+ * - Ocasionalmente faz um voo curto em arco suave acima da copa e retorna ao pouso (desfasado entre indivíduos).
+ */
+export const IsometricBirdArtwork: React.FC<IsometricBirdArtworkProps> = ({
+  bird,
+  baseScreenX,
+  baseScreenY,
+  unlocked,
+  timeSec,
+  isRaining,
+}) => {
+  if (!unlocked) return null;
+
+  const {
+    perchHeightY,
+    flightArcDx,
+    flightArcDy,
+    cycleDurationSec,
+    phaseOffsetSec,
+    plumagePrimary,
+    plumageBreast,
+    plumageWing,
+    facingLeft,
+    scale,
+  } = bird;
+
+  const cycleTime = (timeSec + phaseOffsetSec) % cycleDurationSec;
+  // O voo dura apenas ~4.2 segundos dentro de um ciclo longo (ex: 23s a 31s), e não ocorre sob chuva forte
+  const flightDuration = 4.2;
+  const isFlying = !isRaining && cycleTime < flightDuration;
+
+  let offsetX = 0;
+  let offsetY = perchHeightY;
+  let dirFlip = facingLeft ? -1 : 1;
+  let wingFlapDeg = 0;
+  let headTiltDeg = 0;
+  let bodyHopY = 0;
+  let tailBobDeg = 0;
+
+  if (isFlying) {
+    // p vai de 0 a 1 durante o voo de ida e volta ao galho
+    const p = cycleTime / flightDuration;
+    const smoothLoop = Math.sin(p * Math.PI); // 0 -> 1 -> 0
+    const figureEight = Math.sin(p * Math.PI * 2); // + na ida, - na volta
+
+    offsetX = flightArcDx * smoothLoop + figureEight * 14;
+    offsetY = perchHeightY - Math.sin(p * Math.PI) * flightArcDy - Math.abs(figureEight) * 6;
+
+    // Olha para a direção do deslocamento horizontal atual
+    const vx =
+      flightArcDx * Math.cos(p * Math.PI) * Math.PI +
+      14 * Math.cos(p * Math.PI * 2) * Math.PI * 2;
+    dirFlip = vx < 0 ? -1 : 1;
+    wingFlapDeg = Math.sin(timeSec * 32 + phaseOffsetSec) * 38;
+    tailBobDeg = Math.sin(timeSec * 16) * 8;
+  } else {
+    // Comportamento natural pousado no galho: olha ao redor, dá pequenos pulinhos raros e ajeita a asa
+    const perchTime = cycleTime - flightDuration;
+    const lookWave = Math.sin(perchTime * 2.1 + phaseOffsetSec);
+    headTiltDeg = lookWave > 0.35 ? 14 : lookWave < -0.45 ? -12 : 0;
+
+    // Vira de lado ocasionalmente enquanto está pousado
+    if (Math.sin(perchTime * 0.55 + phaseOffsetSec) < -0.35) {
+      dirFlip = -dirFlip;
+    }
+
+    // Pequeno ajuste discreto de asa quando pousado
+    const twitchWindow = Math.sin(perchTime * 1.8 + phaseOffsetSec * 2.3);
+    if (twitchWindow > 0.86) {
+      wingFlapDeg = Math.sin(timeSec * 26) * 12;
+      bodyHopY = -0.9;
+    }
+
+    tailBobDeg = Math.sin(timeSec * 3.4 + phaseOffsetSec) * 4.5;
+  }
+
+  return (
+    <g
+      transform={`translate(${baseScreenX + offsetX}, ${baseScreenY + offsetY + bodyHopY}) scale(${scale})`}
+      className="pointer-events-none"
+    >
+      {/* Sombra de contato discreta sob as patinhas apenas quando pousado no galho */}
+      {!isFlying && (
+        <ellipse cx="0" cy="1.8" rx="3.4" ry="1.2" fill="#072617" opacity="0.32" />
+      )}
+
+      <g transform={`scale(${dirFlip}, 1)`}>
+        {/* Patinhas finas ancoradas ao galho quando pousado */}
+        {!isFlying && (
+          <path
+            d="M-0.8,0.2 L-1.1,1.8 M0.8,0.2 L0.6,1.8"
+            stroke="#78350F"
+            strokeWidth="0.75"
+            strokeLinecap="round"
+          />
+        )}
+
+        {/* Cauda estreita articulada */}
+        <g transform={`translate(-3.4, -0.6) rotate(${tailBobDeg})`}>
+          <path d="M0,0 L-4.2,-1.6 L-3.6,0.6 Z" fill={plumageWing} />
+        </g>
+
+        {/* Corpo roliço do passarinho */}
+        <ellipse cx="0" cy="-1.2" rx="3.8" ry="2.5" fill={plumagePrimary} />
+        {/* Peito macio aquecido pela luz */}
+        <path
+          d="M-1.2,-0.8 C0.8,-0.8 2.8,-1.8 3.5,-0.5 C3.2,1.1 0.8,1.5 -1.6,0.8 Z"
+          fill={plumageBreast}
+        />
+
+        {/* Asa em movimento (aberta no voo ou recolhida com leve agito no pouso) */}
+        <g transform={`translate(-0.4, -1.6) rotate(${wingFlapDeg})`}>
+          {isFlying ? (
+            <path
+              d="M-1.5,0 C-2.2,-4.6 1.8,-6.2 3.2,-1.2 C1.5,0.4 -0.5,0.4 -1.5,0 Z"
+              fill={plumageWing}
+            />
+          ) : (
+            <ellipse
+              cx="-0.2"
+              cy="0.2"
+              rx="2.5"
+              ry="1.35"
+              transform="rotate(-10)"
+              fill={plumageWing}
+            />
+          )}
+        </g>
+
+        {/* Cabeça articulada, olhinho vivo e bico cônico */}
+        <g transform={`translate(2.6, -2.8) rotate(${headTiltDeg})`}>
+          <circle cx="0" cy="0" r="2.15" fill={plumagePrimary} />
+          <circle cx="0.65" cy="-0.35" r="0.55" fill="#0F172A" />
+          <circle cx="0.8" cy="-0.5" r="0.2" fill="#FFFFFF" />
+          <polygon points="1.8,-0.5 4.0,0.1 1.8,0.65" fill="#F59E0B" />
+        </g>
+      </g>
     </g>
   );
 };

@@ -10,8 +10,14 @@ import {
   WeatherType,
 } from '../types/farm';
 import {
+  AmbientBirdConfig,
+  ButterflyFlightConfig,
+  GroundFloraConfig,
+  IsometricBirdArtwork,
+  IsometricButterflyArtwork,
   IsometricChickenArtwork,
   IsometricCropArtwork,
+  IsometricGroundFloraArtwork,
   IsometricShrubArtwork,
   IsometricTreeArtwork,
   TreeRenderConfig,
@@ -360,12 +366,28 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             const step = Math.min(dist, speed * reactDt);
             const nx = chk.x + (dx / dist) * step;
             const ny = chk.y + (dy / dist) * step;
+            const nextWalkDist = chk.walkDistance + step;
+
+            // Pausa curta natural no meio do caminho ("caminhar alguns passos e parar")
+            // mantendo targetX/targetY para retomar a caminhada suavemente depois
+            if (dist > 0.55 && Math.random() < 0.018) {
+              const pauseDur = 0.65 + Math.random() * 0.55;
+              return {
+                ...chk,
+                x: nx,
+                y: ny,
+                walkDistance: nextWalkDist,
+                state: Math.random() < 0.55 ? 'idle' : 'looking',
+                stateTimer: pauseDur,
+                stateDuration: pauseDur,
+              };
+            }
 
             return {
               ...chk,
               x: nx,
               y: ny,
-              walkDistance: chk.walkDistance + step,
+              walkDistance: nextWalkDist,
             };
           })
         );
@@ -407,23 +429,204 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     []
   );
 
-  // Vegetação rasteira, flores silvestres, folhas caídas e pedrinhas distribuídas fora de caminhos, canteiros e bordas
-  const grassTufts = useMemo(
+  // Vegetação baixa diversificada (margaridas, trevos, flores silvestres e tufos de grama)
+  // distribuída em agrupamentos irregulares fora de caminhos, canteiros e limites de terreno
+  const groundFlora = useMemo<GroundFloraConfig[]>(
     () => [
-      { id: 'gt1', gx: 0.62, gy: 2.95, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: true },
-      { id: 'gt2', gx: 1.52, gy: 5.58, flower: null, fallenLeaf: null, stone: false },
-      { id: 'gt3', gx: 3.85, gy: 1.18, flower: '#FBCFE8', fallenLeaf: '#D97706', stone: false },
-      { id: 'gt4', gx: 4.82, gy: 3.48, flower: null, fallenLeaf: '#C26D1B', stone: true },
-      { id: 'gt5', gx: 2.52, gy: 1.18, flower: '#FEF08A', fallenLeaf: null, stone: false },
-      { id: 'gt6', gx: 5.62, gy: 1.32, flower: '#BAE6FD', fallenLeaf: '#D97706', stone: true },
-      { id: 'gt7', gx: 7.45, gy: 4.35, flower: '#FBCFE8', fallenLeaf: null, stone: false },
-      { id: 'gt8', gx: 4.25, gy: 5.72, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: false },
-      { id: 'gt9', gx: 5.62, gy: 8.15, flower: '#FEF08A', fallenLeaf: null, stone: true },
-      { id: 'gt10', gx: 3.65, gy: 0.82, flower: '#BAE6FD', fallenLeaf: '#D97706', stone: false },
-      { id: 'gt11', gx: 0.65, gy: 5.82, flower: '#FBCFE8', fallenLeaf: null, stone: false },
-      { id: 'gt12', gx: 0.62, gy: 7.82, flower: '#FEF08A', fallenLeaf: '#C26D1B', stone: true },
-      { id: 'gt13', gx: 7.85, gy: 2.65, flower: null, fallenLeaf: '#D97706', stone: false },
-      { id: 'gt14', gx: 8.18, gy: 5.45, flower: '#FBCFE8', fallenLeaf: null, stone: true },
+      {
+        id: 'gf1',
+        gx: 0.62,
+        gy: 2.95,
+        kind: 'daisy_cluster',
+        colorPrimary: '#FEF08A',
+        colorSecondary: '#FFFBEB',
+        fallenLeaf: '#C26D1B',
+        stone: true,
+        scale: 1.0,
+        seed: 1.1,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf2',
+        gx: 0.78,
+        gy: 3.22,
+        kind: 'clover_patch',
+        colorPrimary: '#FFFBEB',
+        scale: 0.92,
+        seed: 2.4,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf3',
+        gx: 2.52,
+        gy: 1.18,
+        kind: 'daisy_cluster',
+        colorPrimary: '#FFFBEB',
+        colorSecondary: '#FEF08A',
+        scale: 0.96,
+        seed: 3.7,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf4',
+        gx: 3.68,
+        gy: 0.82,
+        kind: 'wild_blossom',
+        colorPrimary: '#BAE6FD',
+        colorSecondary: '#7DD3FC',
+        fallenLeaf: '#D97706',
+        scale: 0.95,
+        seed: 4.5,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf5',
+        gx: 3.88,
+        gy: 1.16,
+        kind: 'clover_patch',
+        colorPrimary: '#FBCFE8',
+        scale: 0.9,
+        seed: 5.2,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf6',
+        gx: 4.82,
+        gy: 3.48,
+        kind: 'meadow_tuft',
+        fallenLeaf: '#C26D1B',
+        stone: true,
+        scale: 1.0,
+        seed: 6.1,
+        zone: 'zone_core',
+      },
+      {
+        id: 'gf7',
+        gx: 0.68,
+        gy: 4.18,
+        kind: 'wild_blossom',
+        colorPrimary: '#FBCFE8',
+        colorSecondary: '#F472B6',
+        scale: 0.94,
+        seed: 7.3,
+        zone: 'zone_core',
+      },
+      // Pomar Leste
+      {
+        id: 'gf8',
+        gx: 5.62,
+        gy: 1.32,
+        kind: 'daisy_cluster',
+        colorPrimary: '#BAE6FD',
+        colorSecondary: '#FFFBEB',
+        fallenLeaf: '#D97706',
+        stone: true,
+        scale: 0.98,
+        seed: 8.4,
+        zone: 'zone_east',
+      },
+      {
+        id: 'gf9',
+        gx: 5.84,
+        gy: 1.52,
+        kind: 'clover_patch',
+        colorPrimary: '#FEF08A',
+        scale: 0.88,
+        seed: 9.1,
+        zone: 'zone_east',
+      },
+      {
+        id: 'gf10',
+        gx: 7.45,
+        gy: 4.35,
+        kind: 'wild_blossom',
+        colorPrimary: '#FBCFE8',
+        colorSecondary: '#F9A8D4',
+        scale: 0.96,
+        seed: 10.2,
+        zone: 'zone_east',
+      },
+      {
+        id: 'gf11',
+        gx: 7.85,
+        gy: 2.65,
+        kind: 'meadow_tuft',
+        fallenLeaf: '#D97706',
+        scale: 0.92,
+        seed: 11.5,
+        zone: 'zone_east',
+      },
+      // Vale Sul
+      {
+        id: 'gf12',
+        gx: 0.65,
+        gy: 5.82,
+        kind: 'daisy_cluster',
+        colorPrimary: '#FBCFE8',
+        colorSecondary: '#FFFBEB',
+        scale: 0.95,
+        seed: 12.6,
+        zone: 'zone_south',
+      },
+      {
+        id: 'gf13',
+        gx: 1.52,
+        gy: 5.58,
+        kind: 'clover_patch',
+        colorPrimary: '#FEF08A',
+        scale: 0.9,
+        seed: 13.4,
+        zone: 'zone_south',
+      },
+      {
+        id: 'gf14',
+        gx: 4.25,
+        gy: 5.72,
+        kind: 'wild_blossom',
+        colorPrimary: '#FEF08A',
+        colorSecondary: '#FDE047',
+        fallenLeaf: '#C26D1B',
+        scale: 0.98,
+        seed: 14.8,
+        zone: 'zone_south',
+      },
+      {
+        id: 'gf15',
+        gx: 0.62,
+        gy: 7.82,
+        kind: 'daisy_cluster',
+        colorPrimary: '#FEF08A',
+        colorSecondary: '#FFFBEB',
+        fallenLeaf: '#C26D1B',
+        stone: true,
+        scale: 1.0,
+        seed: 15.9,
+        zone: 'zone_south',
+      },
+      // Colina Sudeste
+      {
+        id: 'gf16',
+        gx: 5.62,
+        gy: 8.15,
+        kind: 'daisy_cluster',
+        colorPrimary: '#FEF08A',
+        colorSecondary: '#FFFBEB',
+        stone: true,
+        scale: 0.96,
+        seed: 16.7,
+        zone: 'zone_southeast',
+      },
+      {
+        id: 'gf17',
+        gx: 8.18,
+        gy: 5.45,
+        kind: 'clover_patch',
+        colorPrimary: '#FBCFE8',
+        stone: true,
+        scale: 0.94,
+        seed: 17.5,
+        zone: 'zone_southeast',
+      },
     ],
     []
   );
@@ -444,7 +647,6 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     []
   );
 
-
   // 4 Espécies de Árvores: Carvalho Frondoso ('oak'), Pinheiro ('pine'), Macieira ('apple') e Ornamental Florada ('ornamental')
   const trees = useMemo<TreeRenderConfig[]>(
     () => [
@@ -462,6 +664,61 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       // Colina Sudeste
       { id: 't10', gx: 8.32, gy: 6.38, scale: 1.03, kind: 'apple', variant: 2, lean: 0.45, zone: 'zone_southeast', seed: 2.4 },
       { id: 't11', gx: 7.82, gy: 8.28, scale: 1.1, kind: 'pine', variant: 0, lean: -0.5, zone: 'zone_southeast', seed: 4.3 },
+    ],
+    []
+  );
+
+  // Passarinhos campestres pousados em galhos específicos e mourões de cerca, com voos curtos desfasados
+  const ambientBirds = useMemo<AmbientBirdConfig[]>(
+    () => [
+      {
+        id: 'bird_1',
+        perchGx: 4.48,
+        perchGy: 0.44,
+        perchHeightY: -31, // Pousado no galho direito do Carvalho t2 (Sede)
+        flightArcDx: -38,
+        flightArcDy: 24,
+        cycleDurationSec: 23,
+        phaseOffsetSec: 2.5,
+        plumagePrimary: '#2563EB', // Azulão campestre suave
+        plumageBreast: '#DBEAFE',
+        plumageWing: '#1D4ED8',
+        facingLeft: true,
+        zone: 'zone_core',
+        scale: 0.92,
+      },
+      {
+        id: 'bird_2',
+        perchGx: 0.44,
+        perchGy: 4.48,
+        perchHeightY: -26, // Pousado no patamar da Árvore Ornamental t4 (Sede)
+        flightArcDx: 34,
+        flightArcDy: 22,
+        cycleDurationSec: 29,
+        phaseOffsetSec: 14.0,
+        plumagePrimary: '#78350F', // Pardal / Tico-tico de peito alaranjado
+        plumageBreast: '#FDBA74',
+        plumageWing: '#451A03',
+        facingLeft: false,
+        zone: 'zone_core',
+        scale: 0.9,
+      },
+      {
+        id: 'bird_3',
+        perchGx: 7.38,
+        perchGy: 0.58,
+        perchHeightY: -33, // Pousado no galho da Macieira t5 (Pomar Leste)
+        flightArcDx: -32,
+        flightArcDy: 25,
+        cycleDurationSec: 27,
+        phaseOffsetSec: 8.2,
+        plumagePrimary: '#D97706', // Canário-da-terra dourado
+        plumageBreast: '#FEF08A',
+        plumageWing: '#92400E',
+        facingLeft: true,
+        zone: 'zone_east',
+        scale: 0.92,
+      },
     ],
     []
   );
@@ -862,76 +1119,98 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     );
   };
 
-  // Duas borboletas campestres delicadas voando suavemente em dias sem chuva
-  const renderButterflies = () => {
-    if (isRaining) return null;
-
-    const butterflies = [
+  // Borboletas campestres estilizadas voando lentamente em trajetórias curvas próximas às flores e bordas verdes
+  const butterflies = useMemo<ButterflyFlightConfig[]>(
+    () => [
       {
         id: 'bf_1',
-        baseGx: 2.8,
-        baseGy: 2.8,
-        radiusX: 1.3,
-        radiusY: 0.9,
-        speed: 0.55,
+        baseGx: 0.72,
+        baseGy: 3.35, // Próxima às margaridas e à Árvore Ornamental na borda oeste
+        radiusX: 0.42,
+        radiusY: 0.55,
+        speed: 0.36,
         phase: 0.4,
-        wingColor: '#FDE047',
-        wingEdge: '#D97706',
+        wingPrimary: '#FDE047',
+        wingSecondary: '#FEF08A',
+        wingEdge: '#B45309',
+        scale: 0.95,
+        zone: 'zone_core',
       },
       {
         id: 'bf_2',
-        baseGx: 4.2,
-        baseGy: 3.4,
-        radiusX: 1.1,
-        radiusY: 1.2,
-        speed: 0.48,
-        phase: 3.1,
-        wingColor: '#BAE6FD',
-        wingEdge: '#0284C7',
+        baseGx: 3.45,
+        baseGy: 0.95, // Próxima às flores silvestres azuis e trevos no gramado norte
+        radiusX: 0.58,
+        radiusY: 0.36,
+        speed: 0.31,
+        phase: 2.7,
+        wingPrimary: '#BAE6FD',
+        wingSecondary: '#E0F2FE',
+        wingEdge: '#0369A1',
+        scale: 0.9,
+        zone: 'zone_core',
       },
-    ];
+      {
+        id: 'bf_3',
+        baseGx: 5.75,
+        baseGy: 1.25, // Próxima às flores do Pomar Leste
+        radiusX: 0.48,
+        radiusY: 0.44,
+        speed: 0.34,
+        phase: 4.9,
+        wingPrimary: '#FBCFE8',
+        wingSecondary: '#FCE7F3',
+        wingEdge: '#BE185D',
+        scale: 0.92,
+        zone: 'zone_east',
+      },
+    ],
+    []
+  );
+
+  const renderButterflies = () => {
+    if (isRaining) return null;
 
     return (
       <g className="pointer-events-none">
-        {butterflies.map((bf) => {
+        {butterflies.map((bf, idx) => {
+          if (!unlockedZoneIds.has(bf.zone)) return null;
+
+          // Trajetória curva orgânica (Lissajous suave com harmônico secundário para mudanças delicadas de direção)
           const t = animTimeSec * bf.speed + bf.phase;
-          const gx = bf.baseGx + Math.sin(t) * bf.radiusX;
-          const gy = bf.baseGy + Math.cos(t * 1.3) * bf.radiusY;
+          const gx =
+            bf.baseGx +
+            Math.sin(t) * bf.radiusX +
+            Math.cos(t * 1.7 + bf.phase) * (bf.radiusX * 0.25);
+          const gy =
+            bf.baseGy +
+            Math.cos(t * 1.25) * bf.radiusY +
+            Math.sin(t * 1.9 + bf.phase) * (bf.radiusY * 0.22);
+
+          // Derivada aproximada para inclinar sutilmente a borboleta na direção da curva
+          const dGx = Math.cos(t) * bf.radiusX;
+          const dGy = -Math.sin(t * 1.25) * bf.radiusY * 1.25;
           const pos = gridToScreen(gx, gy);
-          const flutterY = Math.sin(animTimeSec * 4.5 + bf.phase) * 4.5;
-          const wingScale = 0.35 + Math.abs(Math.sin(animTimeSec * 14 + bf.phase)) * 0.65;
+          const nextPos = gridToScreen(gx + dGx * 0.1, gy + dGy * 0.1);
+          const headingDeg =
+            Math.atan2(nextPos.y - pos.y, nextPos.x - pos.x) * (180 / Math.PI);
+
+          const flutterY = Math.sin(animTimeSec * 3.8 + bf.phase) * 3.2;
+          const flapPhase = animTimeSec * (11.5 + idx * 1.2) + bf.phase * 3;
 
           return (
-            <g key={bf.id} transform={`translate(${pos.x}, ${pos.y})`}>
-              {/* Sombra pequenina no chão */}
-              <ellipse cx="0" cy="4" rx="3.2" ry="1.4" fill="#022C22" opacity="0.22" />
-              {/* Borboleta voando acima das plantas */}
-              <g transform={`translate(0, ${-26 + flutterY})`}>
-                <g transform={`scale(1, ${wingScale})`}>
-                  <ellipse
-                    cx="-2.6"
-                    cy="-1.2"
-                    rx="3.2"
-                    ry="2.2"
-                    transform="rotate(-24 -2.6 -1.2)"
-                    fill={bf.wingColor}
-                    stroke={bf.wingEdge}
-                    strokeWidth="0.45"
-                  />
-                  <ellipse
-                    cx="2.6"
-                    cy="-1.2"
-                    rx="3.2"
-                    ry="2.2"
-                    transform="rotate(24 2.6 -1.2)"
-                    fill={bf.wingColor}
-                    stroke={bf.wingEdge}
-                    strokeWidth="0.45"
-                  />
-                </g>
-                <line x1="0" y1="-2.5" x2="0" y2="1.5" stroke="#1E293B" strokeWidth="0.8" strokeLinecap="round" />
-              </g>
-            </g>
+            <IsometricButterflyArtwork
+              key={bf.id}
+              screenX={pos.x}
+              screenY={pos.y}
+              headingDeg={headingDeg}
+              flapPhase={flapPhase}
+              flutterY={flutterY}
+              wingPrimary={bf.wingPrimary}
+              wingSecondary={bf.wingSecondary}
+              wingEdge={bf.wingEdge}
+              scale={bf.scale}
+            />
           );
         })}
       </g>
@@ -993,6 +1272,25 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
       });
     });
 
+    // Passarinhos ordenados logo à frente da árvore onde pousam para ficarem visíveis no galho
+    ambientBirds.forEach((b) => {
+      const pos = gridToScreen(b.perchGx, b.perchGy);
+      items.push({
+        depth: b.perchGx + b.perchGy + 0.18,
+        node: (
+          <IsometricBirdArtwork
+            key={b.id}
+            bird={b}
+            baseScreenX={pos.x}
+            baseScreenY={pos.y}
+            unlocked={unlockedZoneIds.has(b.zone)}
+            timeSec={animTimeSec}
+            isRaining={isRaining}
+          />
+        ),
+      });
+    });
+
     chickens.forEach((chk) => {
       const pos = gridToScreen(chk.x, chk.y);
       items.push({
@@ -1010,7 +1308,20 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
     });
 
     return items.sort((a, b) => a.depth - b.depth);
-  }, [plots, shrubs, trees, chickens, animTimeSec, now, weather, unlockedZoneIds, selectedCrop, windStrength]);
+  }, [
+    plots,
+    shrubs,
+    trees,
+    ambientBirds,
+    chickens,
+    animTimeSec,
+    now,
+    weather,
+    unlockedZoneIds,
+    selectedCrop,
+    windStrength,
+    isRaining,
+  ]);
 
   return (
     <div
@@ -1257,47 +1568,19 @@ export const IsometricFarmCanvas: React.FC<IsometricFarmCanvasProps> = ({
             />
           )}
 
-          {/* Tufos de vegetação rasteira, flores silvestres, pedrinhas e folhas caídas */}
-          {grassTufts.map((gt, idx) => {
-            const pt = gridToScreen(gt.gx, gt.gy);
-            const sway = computeBreezeAngle(animTimeSec, idx * 1.7, windStrength, 1.85);
+          {/* Agrupamentos irregulares de flores silvestres, trevos, tufos de grama, pedrinhas e folhas caídas */}
+          {groundFlora.map((gf) => {
+            const pt = gridToScreen(gf.gx, gf.gy);
             return (
-              <g key={gt.id} transform={`translate(${pt.x}, ${pt.y})`}>
-                {/* Sombra suave sob o tufo */}
-                <ellipse cx="0" cy="0.8" rx="3.8" ry="1.6" fill="#072617" opacity="0.24" />
-                {gt.stone && (
-                  <>
-                    <ellipse cx="4.2" cy="1.2" rx="2.0" ry="1.05" fill="#64748B" opacity="0.82" />
-                    <ellipse cx="4.0" cy="0.9" rx="1.15" ry="0.55" fill="#CBD5E1" opacity="0.7" />
-                  </>
-                )}
-                {gt.fallenLeaf && (
-                  <ellipse
-                    cx="-4.5"
-                    cy="1.5"
-                    rx="1.8"
-                    ry="0.9"
-                    transform="rotate(-18 -4.5 1.5)"
-                    fill={gt.fallenLeaf}
-                    opacity="0.78"
-                  />
-                )}
-                <g transform={`rotate(${sway})`}>
-                  <path
-                    d="M-0.5,0 Q-2.2,-2.8 -3.4,-5.2 M0,0 L0,-6.4 M0.5,0 Q2.2,-2.8 3.4,-5.0"
-                    stroke="#1E562B"
-                    strokeWidth="1.25"
-                    fill="none"
-                    strokeLinecap="round"
-                  />
-                  {gt.flower && (
-                    <>
-                      <circle cx="0" cy="-6.8" r="1.95" fill={gt.flower} />
-                      <circle cx="0" cy="-6.8" r="0.7" fill="#D97706" />
-                    </>
-                  )}
-                </g>
-              </g>
+              <IsometricGroundFloraArtwork
+                key={gf.id}
+                flora={gf}
+                screenX={pt.x}
+                screenY={pt.y}
+                unlocked={unlockedZoneIds.has(gf.zone)}
+                timeSec={animTimeSec}
+                windStrength={windStrength}
+              />
             );
           })}
 
